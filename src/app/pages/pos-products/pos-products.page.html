@@ -1,0 +1,127 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-button slot="start" fill="clear" (click)="openMenu()">
+      <ion-icon name="menu"></ion-icon>
+    </ion-button>
+    <ion-title>POS - Products</ion-title>
+    <ion-button slot="end" fill="clear" (click)="scanBarcode()">
+      <ion-icon name="barcode"></ion-icon>
+    </ion-button>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <ion-searchbar
+      placeholder="Search products..."
+      [debounce]="300"
+      (ionInput)="onSearchChange($event)"
+    ></ion-searchbar>
+  </ion-toolbar>
+
+  <!-- Category chips -->
+  <ion-toolbar class="category-toolbar">
+    <div class="category-chips">
+      <ion-chip
+        [color]="selectedCategory() === 'all' ? 'primary' : 'medium'"
+        (click)="selectCategory('all')"
+      >
+        <ion-label>All</ion-label>
+      </ion-chip>
+      <ion-chip
+        *ngFor="let category of categories()"
+        [color]="selectedCategory() === category._id ? 'primary' : 'medium'"
+        (click)="selectCategory(category._id)"
+      >
+        <ion-label>{{ category.name }}</ion-label>
+      </ion-chip>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <!-- Products Grid -->
+  <div class="products-container">
+    <ion-grid>
+      <ion-row>
+        <ion-col
+          *ngFor="let product of filteredProducts()"
+          size="6"
+          sizeMd="4"
+          sizeLg="3"
+        >
+          <ion-card class="product-card" button (click)="addToCart(product)">
+            <div class="product-image" [style.background-image]="'url(' + (product.imageUrl || 'assets/img/placeholder.png') + ')'">
+              <ion-badge color="success" *ngIf="product.quantity > 0">
+                In Stock
+              </ion-badge>
+              <ion-badge color="danger" *ngIf="product.quantity === 0">
+                Out of Stock
+              </ion-badge>
+            </div>
+            <ion-card-header>
+              <ion-card-title class="product-name">{{ product.name }}</ion-card-title>
+            </ion-card-header>
+            <ion-card-content>
+              <div class="product-info">
+                <ion-text color="primary">
+                  <h2 class="price">ZMW {{ product.price | number:'1.2-2' }}</h2>
+                </ion-text>
+                <ion-text color="medium">
+                  <p class="stock">Stock: {{ product.quantity }}</p>
+                </ion-text>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </ion-col>
+      </ion-row>
+    </ion-grid>
+
+    <!-- Empty state -->
+    <div class="empty-state" *ngIf="filteredProducts().length === 0 && !isLoading()">
+      <ion-icon name="cart-outline" color="medium"></ion-icon>
+      <h2>No products found</h2>
+      <p>Try adjusting your search or category filter</p>
+    </div>
+
+    <!-- Loading state -->
+    <div class="loading-state" *ngIf="isLoading()">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <p>Loading products...</p>
+    </div>
+  </div>
+
+  <!-- Floating Cart Button -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed" *ngIf="cartItems().length > 0">
+    <ion-fab-button color="primary" (click)="checkout()">
+      <ion-icon name="cart"></ion-icon>
+      <ion-badge class="cart-badge" color="danger">{{ cartItemCount() }}</ion-badge>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>
+
+<!-- Cart Summary Footer -->
+<ion-footer *ngIf="cartItems().length > 0">
+  <ion-toolbar>
+    <ion-grid>
+      <ion-row class="cart-summary">
+        <ion-col size="6">
+          <div class="cart-info">
+            <ion-text color="medium">
+              <small>{{ cartItemCount() }} item(s)</small>
+            </ion-text>
+            <h2>ZMW {{ cartTotal() | number:'1.2-2' }}</h2>
+          </div>
+        </ion-col>
+        <ion-col size="6" class="ion-text-right">
+          <ion-button fill="clear" size="small" (click)="clearCart()">
+            <ion-icon name="trash" slot="start"></ion-icon>
+            Clear
+          </ion-button>
+          <ion-button color="success" (click)="checkout()">
+            <ion-icon name="checkmark" slot="start"></ion-icon>
+            Checkout
+          </ion-button>
+        </ion-col>
+      </ion-row>
+    </ion-grid>
+  </ion-toolbar>
+</ion-footer>

@@ -1,0 +1,67 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-title>ZPOS Login</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <div class="login-container">
+    <div class="logo-section">
+      <h1>ZPOS</h1>
+      <p>Point of Sale System</p>
+    </div>
+
+    <ion-card class="login-card">
+      <ion-card-header>
+        <ion-card-title>Welcome Back</ion-card-title>
+      </ion-card-header>
+
+      <ion-card-content>
+        <form (ngSubmit)="onLogin()">
+          <ion-item>
+            <ion-label position="floating">Username</ion-label>
+            <ion-input
+              type="text"
+              [(ngModel)]="username"
+              name="username"
+              required
+              autocomplete="username"
+            ></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="floating">Password</ion-label>
+            <ion-input
+              type="password"
+              [(ngModel)]="password"
+              name="password"
+              required
+              autocomplete="current-password"
+            ></ion-input>
+          </ion-item>
+
+          <ion-button
+            expand="block"
+            type="submit"
+            class="ion-margin-top"
+            [disabled]="!username || !password"
+          >
+            Login
+          </ion-button>
+        </form>
+
+        <div class="forgot-password ion-margin-top">
+          <ion-text color="medium">
+            <small>Forgot your password? Contact admin</small>
+          </ion-text>
+        </div>
+      </ion-card-content>
+    </ion-card>
+
+    <div class="version-info">
+      <ion-text color="medium">
+        <small>Version 2.0.0</small>
+      </ion-text>
+    </div>
+  </div>
+</ion-content>

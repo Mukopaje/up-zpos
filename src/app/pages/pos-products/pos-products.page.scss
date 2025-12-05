@@ -1,0 +1,160 @@
+.category-toolbar {
+  --background: var(--ion-color-light);
+  overflow-x: auto;
+}
+
+.category-chips {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  white-space: nowrap;
+
+  ion-chip {
+    cursor: pointer;
+    transition: all 0.3s;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+  }
+}
+
+.products-container {
+  padding: 16px;
+  min-height: calc(100vh - 250px);
+}
+
+.product-card {
+  margin: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.product-image {
+  height: 150px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--ion-color-light);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: 8px;
+
+  ion-badge {
+    font-size: 10px;
+  }
+}
+
+.product-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .price {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+  }
+
+  .stock {
+    margin: 0;
+    font-size: 12px;
+  }
+}
+
+.empty-state,
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+
+  ion-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    color: var(--ion-color-medium);
+    margin: 8px 0;
+  }
+
+  p {
+    color: var(--ion-color-medium-shade);
+    margin: 0;
+  }
+}
+
+.cart-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cart-summary {
+  padding: 8px 0;
+  align-items: center;
+
+  .cart-info {
+    small {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--ion-color-primary);
+    }
+  }
+}
+
+// Responsive adjustments
+@media (min-width: 768px) {
+  .products-container {
+    padding: 24px;
+  }
+
+  .product-card {
+    .product-image {
+      height: 180px;
+    }
+  }
+}
+
+@media (min-width: 1024px) {
+  .product-card {
+    .product-image {
+      height: 200px;
+    }
+
+    .product-name {
+      font-size: 16px;
+    }
+  }
+}

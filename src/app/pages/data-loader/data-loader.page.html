@@ -1,0 +1,15 @@
+<ion-content [fullscreen]="true" class="ion-padding">
+  <div class="loader-container">
+    <div class="logo-section">
+      <h1>ZPOS</h1>
+    </div>
+
+    <div class="loading-section">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <ion-text color="medium">
+        <p>{{ loadingMessage() }}</p>
+      </ion-text>
+      <ion-progress-bar [value]="progress()" color="primary"></ion-progress-bar>
+    </div>
+  </div>
+</ion-content>

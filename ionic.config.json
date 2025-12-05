@@ -1,0 +1,7 @@
+{
+  "name": "ZPOS-TAB-V8",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "angular"
+}
