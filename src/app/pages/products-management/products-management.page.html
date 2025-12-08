@@ -1,0 +1,156 @@
+<ion-header>
+  <ion-toolbar color="dark">
+    <ion-title>Products Management</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="toggleViewMode()">
+        <ion-icon [name]="viewMode() === 'grid' ? 'list-outline' : 'grid-outline'"></ion-icon>
+      </ion-button>
+      <ion-button (click)="showBulkActions()">
+        <ion-icon name="cloud-upload-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <ion-toolbar color="dark">
+    <ion-searchbar
+      [(ngModel)]="searchQuery"
+      placeholder="Search by name, SKU, or barcode"
+      [debounce]="300"
+    ></ion-searchbar>
+  </ion-toolbar>
+
+  <ion-toolbar color="dark">
+    <ion-segment [(ngModel)]="selectedCategory" scrollable>
+      <ion-segment-button value="all">
+        <ion-label>All</ion-label>
+      </ion-segment-button>
+      <ion-segment-button *ngFor="let cat of categories.slice(1)" [value]="cat">
+        <ion-label>{{ cat }}</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Loading State -->
+  <div *ngIf="isLoading()" class="loading-container">
+    <ion-spinner name="crescent"></ion-spinner>
+    <p>Loading products...</p>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!isLoading() && filteredProducts().length === 0" class="empty-state">
+    <ion-icon name="search-outline" size="large"></ion-icon>
+    <h3>No products found</h3>
+    <p>{{ searchQuery() ? 'Try a different search term' : 'Add your first product to get started' }}</p>
+    <ion-button (click)="openAddProductModal()">
+      <ion-icon name="add" slot="start"></ion-icon>
+      Add Product
+    </ion-button>
+  </div>
+
+  <!-- Grid View -->
+  <ion-grid *ngIf="!isLoading() && viewMode() === 'grid' && filteredProducts().length > 0">
+    <ion-row>
+      <ion-col size="12" size-md="6" size-lg="4" size-xl="3" *ngFor="let product of filteredProducts()">
+        <ion-card class="product-card">
+          <img
+            [src]="product.imageUrl || 'https://via.placeholder.com/300?text=' + product.name"
+            [alt]="product.name"
+            class="product-image"
+          />
+          <ion-card-header>
+            <ion-card-title>{{ product.name }}</ion-card-title>
+            <div class="product-meta">
+              <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
+              <ion-badge *ngIf="product.aiGeneratedDescription" color="secondary">
+                <ion-icon name="sparkles-outline" size="small"></ion-icon>
+              </ion-badge>
+            </div>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="product-info">
+              <div class="info-row">
+                <span class="label">Price:</span>
+                <span class="value price">K{{ product.price.toFixed(2) }}</span>
+              </div>
+              <div class="info-row" *ngIf="product.cost">
+                <span class="label">Cost:</span>
+                <span class="value">K{{ product.cost.toFixed(2) }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Stock:</span>
+                <span class="value" [class.low-stock]="product.stockQuantity < 10">
+                  {{ product.stockQuantity }} units
+                </span>
+              </div>
+              <div class="info-row" *ngIf="product.barcode">
+                <span class="label">Barcode:</span>
+                <span class="value">{{ product.barcode }}</span>
+              </div>
+            </div>
+            <div class="product-actions">
+              <ion-button fill="clear" size="small" (click)="openEditProductModal(product)">
+                <ion-icon name="create-outline" slot="start"></ion-icon>
+                Edit
+              </ion-button>
+              <ion-button fill="clear" size="small" color="danger" (click)="deleteProduct(product)">
+                <ion-icon name="trash-outline" slot="start"></ion-icon>
+                Delete
+              </ion-button>
+            </div>
+          </ion-card-content>
+        </ion-card>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+
+  <!-- List View -->
+  <div *ngIf="!isLoading() && viewMode() === 'list' && filteredProducts().length > 0" class="list-view">
+    <ion-item *ngFor="let product of filteredProducts()" lines="full" class="product-list-item">
+      <img
+        [src]="product.imageUrl || 'https://via.placeholder.com/100?text=' + product.name"
+        [alt]="product.name"
+        class="list-thumbnail"
+        slot="start"
+      />
+      <ion-label>
+        <h2>{{ product.name }}</h2>
+        <p *ngIf="product.barcode">Barcode: {{ product.barcode }}</p>
+        <p *ngIf="product.sku">SKU: {{ product.sku }}</p>
+        <div class="list-meta">
+          <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
+          <span class="price">K{{ product.price.toFixed(2) }}</span>
+          <span class="stock" [class.low-stock]="product.stockQuantity < 10">
+            {{ product.stockQuantity }} in stock
+          </span>
+        </div>
+      </ion-label>
+      <ion-button slot="end" fill="clear" (click)="openEditProductModal(product)">
+        <ion-icon name="create-outline"></ion-icon>
+      </ion-button>
+      <ion-button slot="end" fill="clear" color="danger" (click)="deleteProduct(product)">
+        <ion-icon name="trash-outline"></ion-icon>
+      </ion-button>
+    </ion-item>
+  </div>
+
+  <!-- FAB Buttons -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button color="primary">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+    <ion-fab-list side="top">
+      <ion-fab-button color="secondary" (click)="openAddProductModal()">
+        <ion-icon name="add"></ion-icon>
+      </ion-fab-button>
+      <ion-fab-button color="tertiary" (click)="scanBarcode()">
+        <ion-icon name="barcode-outline"></ion-icon>
+      </ion-fab-button>
+    </ion-fab-list>
+  </ion-fab>
+</ion-content>
