@@ -1,0 +1,119 @@
+<ion-header>
+  <ion-toolbar color="success">
+    <ion-title>✓ Payment Successful</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="dismiss()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="receipt-content">
+  <div class="receipt-container">
+    <!-- Business Header -->
+    <div class="receipt-header">
+      <h2>{{ businessName }}</h2>
+      <p class="date">{{ formatDate(order.createdAt) }}</p>
+      <p class="order-number">Order #{{ order.orderNumber || order.invoice_no }}</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Items -->
+    <div class="items-section">
+      @for (item of order.items; track $index) {
+        <div class="item-row">
+          <div class="item-info">
+            <span class="item-qty">{{ getItemQuantity(item) }}x</span>
+            <span class="item-name">{{ getItemName(item) }}</span>
+          </div>
+          <span class="item-price">{{ getItemTotal(item).toFixed(2) }}</span>
+        </div>
+      }
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Totals -->
+    <div class="totals-section">
+      <div class="total-row">
+        <span>Subtotal:</span>
+        <span>{{ getSubtotal().toFixed(2) }}</span>
+      </div>
+
+      @if (getTax() > 0) {
+        <div class="total-row">
+          <span>Tax:</span>
+          <span>{{ getTax().toFixed(2) }}</span>
+        </div>
+      }
+
+      @if (getDiscount() > 0) {
+        <div class="total-row discount">
+          <span>Discount:</span>
+          <span>-{{ getDiscount().toFixed(2) }}</span>
+        </div>
+      }
+
+      <div class="divider"></div>
+
+      <div class="total-row grand-total">
+        <span>TOTAL:</span>
+        <span>{{ getTotal().toFixed(2) }}</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="total-row payment-info">
+        <span>Paid ({{ getPaymentMethod() }}):</span>
+        <span>{{ getAmountPaid().toFixed(2) }}</span>
+      </div>
+
+      @if (getChange() > 0) {
+        <div class="total-row change">
+          <span>Change:</span>
+          <span>{{ getChange().toFixed(2) }}</span>
+        </div>
+      }
+    </div>
+
+    <!-- Customer Info -->
+    @if (order.customer) {
+      <div class="divider"></div>
+      <div class="customer-section">
+        <p><strong>Customer:</strong> {{ order.customer.name }}</p>
+        <p><strong>Phone:</strong> {{ order.customer.phone }}</p>
+      </div>
+    }
+
+    <!-- Footer -->
+    <div class="receipt-footer">
+      <p>Thank you for your business!</p>
+    </div>
+  </div>
+</ion-content>
+
+<!-- Action Buttons -->
+<div class="action-buttons">
+  <ion-button expand="block" (click)="handlePrint()" color="primary">
+    <ion-icon name="print" slot="start"></ion-icon>
+    Print Receipt
+  </ion-button>
+
+  <div class="share-buttons">
+    <ion-button expand="block" (click)="handleWhatsApp()" class="whatsapp-btn">
+      <ion-icon name="logo-whatsapp" slot="start"></ion-icon>
+      WhatsApp
+    </ion-button>
+
+    <ion-button expand="block" (click)="handleEmail()" color="secondary">
+      <ion-icon name="mail" slot="start"></ion-icon>
+      Email
+    </ion-button>
+  </div>
+
+  <ion-button expand="block" (click)="dismiss()" fill="outline" color="medium">
+    Done
+  </ion-button>
+</div>

@@ -1,0 +1,537 @@
+<ion-header>
+  <ion-toolbar>
+    @if (isMobile() && currentView() === 'products' && selectedCategory()) {
+      <!-- Mobile Products View Header - Show back to categories -->
+      <ion-button slot="start" fill="clear" (click)="backToCategories()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+      <ion-title>{{ getCategoryName(selectedCategory()!) }}</ion-title>
+      <ion-button slot="end" fill="clear" (click)="viewCart()">
+        <ion-icon name="cart"></ion-icon>
+        @if (cartItems().length > 0) {
+          <ion-badge color="danger" class="header-cart-badge">{{ cartSummary().itemCount }}</ion-badge>
+        }
+      </ion-button>
+    } @else if (isMobile() && currentView() === 'checkout') {
+      <!-- Mobile Checkout Header -->
+      <ion-button slot="start" fill="clear" (click)="closeCheckout()">
+        <ion-icon name="close"></ion-icon>
+      </ion-button>
+      <ion-title>Checkout</ion-title>
+    } @else if (isMobile() && currentView() === 'cart') {
+      <!-- Mobile Cart Header -->
+      <ion-button slot="start" fill="clear" (click)="backToProducts()">
+        <ion-icon name="arrow-back"></ion-icon>
+      </ion-button>
+      <ion-title>Cart</ion-title>
+    } @else {
+      <!-- Desktop Header & Mobile Categories Header -->
+      <ion-button slot="start" fill="clear" (click)="openMenu()">
+        <ion-icon name="menu-outline"></ion-icon>
+      </ion-button>
+      <ion-title>Point of Sale</ion-title>
+      
+      <!-- Keyboard Buffer Indicator -->
+      @if (keyboardBuffer() || searchBuffer()) {
+        <ion-badge color="warning" class="buffer-badge">
+          @if (keyboardBuffer()) {
+            Qty: {{ keyboardBuffer() }}
+          }
+          @if (searchBuffer()) {
+            Search: {{ searchBuffer() }}
+          }
+        </ion-badge>
+      }
+      
+      @if (!isMobile()) {
+        <ion-searchbar
+          placeholder="Search products..."
+          [debounce]="300"
+          (ionInput)="onSearchChange($event)"
+          class="header-search"
+        ></ion-searchbar>
+        <ion-button slot="end" fill="clear" (click)="scanBarcode()" [disabled]="isScanning()">
+          @if (isScanning()) {
+            <ion-spinner name="crescent"></ion-spinner>
+          } @else {
+            <ion-icon name="barcode"></ion-icon>
+          }
+        </ion-button>
+      }
+    }
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Three-column layout: Cart | Categories | Products -->
+  <div class="pos-layout" 
+       [class.mobile-layout]="isMobile()"
+       [class.checkout-fullscreen]="currentView() === 'checkout'">
+    
+    <!-- LEFT: Cart Section -->
+    <div class="cart-column" 
+         [class.mobile-hidden]="isMobile() && currentView() !== 'cart' && currentView() !== 'checkout'"
+         [class.checkout-expanded]="currentView() === 'checkout'">
+      <div class="cart-container">
+        
+        @if (currentView() === 'checkout') {
+          <!-- ========== CHECKOUT VIEW ========== -->
+          @if (!isMobile()) {
+            <div class="checkout-header">
+              <div style="display: flex; align-items: center; flex: 1;">
+                <ion-button fill="clear" (click)="closeCheckout()">
+                  <ion-icon name="close" slot="start"></ion-icon>
+                  Close
+                </ion-button>
+                <h2>Checkout</h2>
+              </div>
+            </div>
+          }
+
+          <div class="checkout-content">
+            <!-- Order Summary -->
+            <ion-card>
+              <ion-card-header>
+                <ion-card-title>Order Summary</ion-card-title>
+              </ion-card-header>
+              <ion-card-content>
+                <div class="summary-section">
+                  <div class="summary-row">
+                    <span>Items ({{ cartSummary().itemCount }}):</span>
+                    <strong>ZMW {{ cartSummary().subtotal | number:'1.2-2' }}</strong>
+                  </div>
+                  @if (cartSummary().tax > 0) {
+                    <div class="summary-row">
+                      <span>Tax:</span>
+                      <strong>ZMW {{ cartSummary().tax | number:'1.2-2' }}</strong>
+                    </div>
+                  }
+                  @if (cartSummary().discount > 0) {
+                    <div class="summary-row discount">
+                      <span>Discount:</span>
+                      <strong>-ZMW {{ cartSummary().discount | number:'1.2-2' }}</strong>
+                    </div>
+                  }
+                  <div class="summary-row total">
+                    <span>TOTAL:</span>
+                    <strong>ZMW {{ cartSummary().total | number:'1.2-2' }}</strong>
+                  </div>
+                </div>
+              </ion-card-content>
+            </ion-card>
+
+            <!-- Customer Section -->
+            <ion-card class="customer-card">
+              <ion-card-header>
+                <div class="customer-header">
+                  <ion-card-title>Customer</ion-card-title>
+                  @if (selectedCustomer()) {
+                    <ion-button fill="clear" size="small" (click)="clearCustomer()">
+                      <ion-icon name="close" slot="icon-only"></ion-icon>
+                    </ion-button>
+                  }
+                </div>
+              </ion-card-header>
+              <ion-card-content>
+                @if (selectedCustomer()) {
+                  <div class="customer-info">
+                    <h3>{{ selectedCustomer()!.name }}</h3>
+                    <p>{{ selectedCustomer()!.phone }}</p>
+                    @if (selectedCustomer()!.balance > 0) {
+                      <ion-text color="danger">
+                        <p><strong>Balance:</strong> ZMW {{ selectedCustomer()!.balance | number:'1.2-2' }}</p>
+                      </ion-text>
+                    }
+                    @if (selectedCustomer()!.creditLimit > 0) {
+                      <ion-text color="success">
+                        <p><strong>Credit Available:</strong> ZMW {{ (selectedCustomer()!.creditLimit - selectedCustomer()!.balance) | number:'1.2-2' }}</p>
+                      </ion-text>
+                    }
+                  </div>
+                } @else {
+                  <ion-button expand="block" fill="outline" (click)="selectCustomer()">
+                    <ion-icon name="person" slot="start"></ion-icon>
+                    Select Customer
+                  </ion-button>
+                }
+              </ion-card-content>
+            </ion-card>
+
+            <!-- Payment Section -->
+            <ion-card class="payment-card">
+              <ion-card-header>
+                <ion-card-title>Payment</ion-card-title>
+              </ion-card-header>
+              <ion-card-content>
+                
+                <!-- Payment Type Selector -->
+                <ion-segment [value]="paymentType()" (ionChange)="selectPaymentType($any($event.detail.value))">
+                  <ion-segment-button value="cash">
+                    <ion-icon name="cash"></ion-icon>
+                    <ion-label>Cash</ion-label>
+                  </ion-segment-button>
+                  <ion-segment-button value="card">
+                    <ion-icon name="card"></ion-icon>
+                    <ion-label>Card</ion-label>
+                  </ion-segment-button>
+                  <ion-segment-button value="mobile">
+                    <ion-icon name="phone-portrait"></ion-icon>
+                    <ion-label>Mobile</ion-label>
+                  </ion-segment-button>
+                  <ion-segment-button value="credit" [disabled]="!selectedCustomer()">
+                    <ion-icon name="person"></ion-icon>
+                    <ion-label>Credit</ion-label>
+                  </ion-segment-button>
+                </ion-segment>
+
+                <!-- Cash Payment -->
+                @if (paymentType() === 'cash') {
+                  <div class="payment-input">
+                    <ion-item>
+                      <ion-label position="stacked">Cash Received</ion-label>
+                      <ion-input
+                        type="number"
+                        [(ngModel)]="cashReceived"
+                        (ionChange)="calculateTotal()"
+                        placeholder="0.00"
+                      ></ion-input>
+                    </ion-item>
+
+                    <div class="quick-amounts">
+                      <ion-button size="small" fill="outline" (click)="setQuickCash(cartSummary().total)">
+                        Exact
+                      </ion-button>
+                      <ion-button size="small" fill="outline" (click)="setQuickCash(50)">
+                        50
+                      </ion-button>
+                      <ion-button size="small" fill="outline" (click)="setQuickCash(100)">
+                        100
+                      </ion-button>
+                      <ion-button size="small" fill="outline" (click)="setQuickCash(200)">
+                        200
+                      </ion-button>
+                    </div>
+
+                    @if (change() > 0) {
+                      <ion-text color="success">
+                        <div class="change-display">
+                          <strong>Change: ZMW {{ change() | number:'1.2-2' }}</strong>
+                        </div>
+                      </ion-text>
+                    }
+                  </div>
+                }
+
+                <!-- Card Payment -->
+                @if (paymentType() === 'card') {
+                  <div class="payment-input">
+                    <ion-item>
+                      <ion-label position="stacked">Card Amount</ion-label>
+                      <ion-input
+                        type="number"
+                        [(ngModel)]="cardAmount"
+                        (ionChange)="calculateTotal()"
+                        placeholder="0.00"
+                      ></ion-input>
+                    </ion-item>
+                  </div>
+                }
+
+                <!-- Mobile Payment -->
+                @if (paymentType() === 'mobile') {
+                  <div class="payment-input">
+                    <ion-item>
+                      <ion-label position="stacked">Mobile Amount</ion-label>
+                      <ion-input
+                        type="number"
+                        [(ngModel)]="mobileAmount"
+                        (ionChange)="calculateTotal()"
+                        placeholder="0.00"
+                      ></ion-input>
+                    </ion-item>
+                  </div>
+                }
+
+                <!-- Credit Payment -->
+                @if (paymentType() === 'credit') {
+                  <div class="credit-info">
+                    @if (selectedCustomer()) {
+                      <ion-text>
+                        <p>Amount will be added to customer account</p>
+                        <p><strong>Current Balance:</strong> ZMW {{ selectedCustomer()!.balance | number:'1.2-2' }}</p>
+                        <p><strong>New Balance:</strong> ZMW {{ (selectedCustomer()!.balance + cartSummary().total) | number:'1.2-2' }}</p>
+                      </ion-text>
+                    } @else {
+                      <ion-text color="warning">
+                        <p>Please select a customer for credit payment</p>
+                      </ion-text>
+                    }
+                  </div>
+                }
+
+                <!-- Notes -->
+                <ion-item>
+                  <ion-label position="stacked">Notes (Optional)</ion-label>
+                  <ion-input
+                    [(ngModel)]="notes"
+                    placeholder="Add order notes..."
+                  ></ion-input>
+                </ion-item>
+              </ion-card-content>
+            </ion-card>
+
+            <!-- Complete Order Button -->
+            <div class="checkout-actions">
+              <ion-button
+                expand="block"
+                size="large"
+                color="success"
+                (click)="completeOrder()"
+                [disabled]="insufficientPayment()"
+              >
+                <ion-icon name="checkmark" slot="start"></ion-icon>
+                Complete Order
+              </ion-button>
+              
+              @if (insufficientPayment()) {
+                <ion-text color="danger">
+                  <p class="error-text">
+                    @if (paymentType() === 'credit') {
+                      Insufficient credit limit
+                    } @else {
+                      Payment amount is less than total
+                    }
+                  </p>
+                </ion-text>
+              }
+            </div>
+          </div>
+        } @else {
+          <!-- ========== CART VIEW ========== -->
+          <div class="cart-header">
+            <h2>Cart</h2>
+            @if (cartItems().length > 0) {
+              <ion-button fill="clear" color="danger" size="small" (click)="clearCart()">
+                <ion-icon name="trash" slot="start"></ion-icon>
+                Clear
+              </ion-button>
+            }
+          </div>
+
+          @if (cartItems().length === 0) {
+            <div class="empty-cart">
+              <ion-icon name="cart" color="medium"></ion-icon>
+              <h3>Cart is empty</h3>
+              <p>Add products to get started</p>
+            </div>
+          } @else {
+            <ion-card class="cart-items-card">
+              <ion-card-content>
+                <ion-list lines="full">
+                  <ion-item *ngFor="let item of cartItems()" (press)="editCartItem(item)">
+                    <div class="cart-item-new">
+                      <div class="item-info">
+                        <h3>{{ item.product.name }}</h3>
+                        @if (item.selectedVariant) {
+                          <p class="item-option">{{ item.selectedVariant.name }}</p>
+                        }
+                        @if (item.selectedPortion) {
+                          <p class="item-option">{{ item.selectedPortion.name }}</p>
+                        }
+                        @if (item.modifiers && item.modifiers.length > 0) {
+                          <p class="item-modifiers">
+                            @for (mod of item.modifiers; track mod.groupId) {
+                              <span class="modifier-badge">{{ mod.optionName }}</span>
+                            }
+                          </p>
+                        }
+                      </div>
+                      
+                      <div class="item-right">
+                        <div class="quantity-total">
+                          <span class="qty">{{ item.quantity }}x</span>
+                          <strong class="line-total">ZMW {{ item.total | number:'1.2-2' }}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </ion-item>
+                </ion-list>
+              </ion-card-content>
+            </ion-card>
+
+            <div class="cart-footer">
+              <div class="summary-section">
+                <div class="summary-row">
+                  <span>Subtotal:</span>
+                  <span>ZMW {{ cartSummary().subtotal | number:'1.2-2' }}</span>
+                </div>
+                @if (cartSummary().tax > 0) {
+                  <div class="summary-row">
+                    <span>Tax:</span>
+                    <span>ZMW {{ cartSummary().tax | number:'1.2-2' }}</span>
+                  </div>
+                }
+                @if (cartSummary().discount > 0) {
+                  <div class="summary-row discount">
+                    <span>Discount:</span>
+                    <span>-ZMW {{ cartSummary().discount | number:'1.2-2' }}</span>
+                  </div>
+                }
+                <div class="summary-row total">
+                  <span>TOTAL:</span>
+                  <strong>ZMW {{ cartSummary().total | number:'1.2-2' }}</strong>
+                </div>
+              </div>
+              
+              <ion-button
+                expand="block"
+                size="large"
+                color="success"
+                (click)="goToCheckout()"
+                class="checkout-button"
+              >
+                <ion-icon name="card" slot="start"></ion-icon>
+                Proceed to Checkout
+              </ion-button>
+            </div>
+          }
+        }
+        
+      </div>
+    </div>
+
+    <!-- MIDDLE: Categories Section -->
+    <div class="categories-column" 
+         [class.mobile-hidden]="isMobile() && (currentView() !== 'products' || selectedCategory())"
+         [class.checkout-hidden]="currentView() === 'checkout'">
+      <div class="categories-container">
+        <div class="categories-grid" [class.two-columns]="categoryColumns() === 2">
+          <!-- Category Tiles -->
+          <div
+            *ngFor="let category of paginatedCategories()"
+            class="category-tile"
+            [class.active]="selectedCategory() === category._id"
+            (click)="selectCategory(category._id)"
+            [style.background-color]="!category.imageUrl ? categoryTileColor() : 'transparent'"
+            [style.background-image]="category.imageUrl ? 'url(' + category.imageUrl + ')' : 'none'"
+          >
+            <div class="category-content">
+              <ion-label>{{ category.name }}</ion-label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pagination Controls -->
+        @if (totalCategoryPages() > 1) {
+          <div class="pagination-controls">
+            <ion-button
+              fill="clear"
+              size="small"
+              (click)="previousCategoryPage()"
+              [disabled]="currentCategoryPage() === 1"
+            >
+              <ion-icon name="chevron-back" slot="icon-only"></ion-icon>
+            </ion-button>
+            <span class="page-indicator">{{ currentCategoryPage() }} / {{ totalCategoryPages() }}</span>
+            <ion-button
+              fill="clear"
+              size="small"
+              (click)="nextCategoryPage()"
+              [disabled]="currentCategoryPage() === totalCategoryPages()"
+            >
+              <ion-icon name="chevron-forward" slot="icon-only"></ion-icon>
+            </ion-button>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- RIGHT: Products Section -->
+    <div class="products-column" 
+         [class.mobile-hidden]="isMobile() && (currentView() !== 'products' || !selectedCategory())"
+         [class.checkout-hidden]="currentView() === 'checkout'">
+      
+      <!-- Global Search Results Overlay -->
+      @if (isGlobalSearchActive() && globalSearchProducts().length > 0) {
+        <div class="search-results-overlay">
+          <div class="search-results-header">
+            <h3>Search Results ({{ globalSearchProducts().length }})</h3>
+            <ion-button fill="clear" size="small" (click)="clearBuffers()">
+              <ion-icon name="close" slot="icon-only"></ion-icon>
+            </ion-button>
+          </div>
+          <ion-list class="search-results-list">
+            <ion-item 
+              *ngFor="let product of globalSearchProducts()" 
+              button 
+              (click)="addProductWithBuffer(product)"
+              lines="full"
+            >
+              <div class="search-result-item">
+                <div class="search-result-main">
+                  <div class="search-result-name">{{ product.name }}</div>
+                  <ion-badge color="medium" class="category-badge">
+                    {{ getCategoryName(product.category) }}
+                  </ion-badge>
+                </div>
+                <div class="search-result-price">
+                  ZMW {{ product.price | number:'1.2-2' }}
+                </div>
+              </div>
+            </ion-item>
+          </ion-list>
+        </div>
+      }
+      
+      <!-- Regular Product Grid -->
+      <div class="products-grid" [class.hidden]="isGlobalSearchActive()">
+        <ion-grid>
+          <ion-row>
+            <ion-col
+              *ngFor="let product of filteredProducts()"
+              size="6"
+              sizeMd="4"
+              sizeLg="3"
+            >
+              <div
+                class="product-tile"
+                (click)="addToCart(product)"
+                [style.background-color]="!product.imageUrl ? productTileColor() : 'transparent'"
+                [style.background-image]="product.imageUrl ? 'url(' + product.imageUrl + ')' : 'none'"
+              >
+                <div class="product-content">
+                  <div class="product-name">{{ product.name }}</div>
+                  <div class="product-price">ZMW {{ product.price | number:'1.2-2' }}</div>
+                </div>
+              </div>
+            </ion-col>
+          </ion-row>
+        </ion-grid>
+
+        <!-- Empty state -->
+        <div class="empty-state" *ngIf="filteredProducts().length === 0 && !isLoading()">
+          <ion-icon name="search" color="medium"></ion-icon>
+          <h2>No products found</h2>
+          <p>Try adjusting your search or category filter</p>
+        </div>
+
+        <!-- Loading state -->
+        <div class="loading-state" *ngIf="isLoading()">
+          <ion-spinner name="crescent" color="primary"></ion-spinner>
+          <p>Loading products...</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mobile Floating Cart Button (hidden when showing cart, checkout, or when cart is empty) -->
+  @if (isMobile() && currentView() === 'products' && selectedCategory() && cartItems().length > 0) {
+    <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+      <ion-fab-button color="primary" (click)="viewCart()">
+        <ion-icon name="cart"></ion-icon>
+        <ion-badge color="danger" class="cart-badge">{{ cartSummary().itemCount }}</ion-badge>
+      </ion-fab-button>
+    </ion-fab>
+  }
+</ion-content>

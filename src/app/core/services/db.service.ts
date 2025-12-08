@@ -84,10 +84,10 @@ export class DbService {
       live: true,
       retry: true
     })
-    .on('change', (info) => {
+    .on('change', (info: any) => {
       console.log('Sync change:', info);
     })
-    .on('paused', (err) => {
+    .on('paused', (err: any) => {
       this.isSyncing.set(false);
       console.log('Sync paused:', err);
     })
@@ -95,7 +95,7 @@ export class DbService {
       this.isSyncing.set(true);
       console.log('Sync active');
     })
-    .on('error', (err) => {
+    .on('error', (err: any) => {
       console.error('Sync error:', err);
     });
   }
@@ -150,7 +150,7 @@ export class DbService {
         include_docs: true,
         ...options
       });
-      return result.rows.map(row => row.doc as T);
+      return result.rows.map((row: any) => row.doc as T);
     } catch (error) {
       console.error('AllDocs error:', error);
       return [];
@@ -163,15 +163,22 @@ export class DbService {
     await this.db.bulkDocs(docs);
   }
 
-  async query<T>(
-    fun: string | PouchDB.Map<T, any>,
-    options?: PouchDB.Query.Options<T, any>
-  ): Promise<T[]> {
+  async query<T extends {} = any>(
+    fun: string | PouchDB.Map<any, any> | PouchDB.Find.FindRequest<T>,
+    options?: PouchDB.Query.Options<any, any>
+  ): Promise<PouchDB.Find.FindResponse<T> | T[]> {
     if (!this.db) return [];
 
     try {
-      const result = await this.db.query(fun, options);
-      return result.rows.map(row => row.value as T);
+      // Check if it's a find request (has selector property)
+      if (typeof fun === 'object' && 'selector' in fun) {
+        const result = await this.db.find(fun as PouchDB.Find.FindRequest<T>);
+        return result as PouchDB.Find.FindResponse<T>;
+      }
+      
+      // Otherwise it's a regular query
+      const result = await this.db.query(fun as any, options);
+      return result.rows.map((row: any) => row.value as T);
     } catch (error) {
       console.error('Query error:', error);
       return [];

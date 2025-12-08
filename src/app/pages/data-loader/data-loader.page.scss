@@ -9,6 +9,12 @@
 .logo-section {
   margin-bottom: 3rem;
 
+  .logo {
+    max-width: 150px;
+    height: auto;
+    animation: pulse 2s infinite;
+  }
+
   h1 {
     font-size: 4rem;
     font-weight: bold;

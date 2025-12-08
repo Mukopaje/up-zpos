@@ -10,6 +10,7 @@ import {
 
 import { DbService } from '../../core/services/db.service';
 import { SettingsService } from '../../core/services/settings.service';
+import { SeedDataService } from '../../core/services/seed-data.service';
 
 @Component({
   selector: 'app-data-loader',
@@ -28,6 +29,7 @@ export class DataLoaderPage implements OnInit {
   private router = inject(Router);
   private dbService = inject(DbService);
   private settingsService = inject(SettingsService);
+  private seedDataService = inject(SeedDataService);
 
   loadingMessage = signal('Initializing...');
   progress = signal(0);
@@ -47,13 +49,14 @@ export class DataLoaderPage implements OnInit {
         await this.dbService.initDB();
       }
 
-      // Step 2: Load settings
-      this.loadingMessage.set('Loading settings...');
+      // Step 2: Seed sample data
+      this.loadingMessage.set('Loading sample products...');
       this.progress.set(0.4);
+      await this.seedDataService.seedSampleData();
       await this.delay(500);
 
-      // Step 3: Sync data (if online)
-      this.loadingMessage.set('Syncing data...');
+      // Step 3: Load settings
+      this.loadingMessage.set('Loading settings...');
       this.progress.set(0.6);
       await this.delay(500);
 
@@ -70,7 +73,7 @@ export class DataLoaderPage implements OnInit {
       // Navigate to appropriate page based on mode
       const mode = this.settingsService.getMode();
       if (mode.category) {
-        this.router.navigate(['/pos-products'], { replaceUrl: true });
+        this.router.navigate(['/pos'], { replaceUrl: true });
       } else if (mode.retail) {
         this.router.navigate(['/pos'], { replaceUrl: true });
       } else if (mode.restaurant || mode.distributor) {

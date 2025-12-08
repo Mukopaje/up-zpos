@@ -1,0 +1,143 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Terminals</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="createTerminal()">
+        <ion-icon slot="icon-only" name="add"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  @if (loading()) {
+    <div class="loading-container">
+      <ion-spinner></ion-spinner>
+    </div>
+  } @else {
+    <div class="terminals-container">
+      @for (terminal of terminals(); track terminal._id) {
+        <ion-card>
+          <ion-card-header>
+            <div class="terminal-header">
+              <div class="terminal-info">
+                <ion-card-title>
+                  <ion-icon name="desktop"></ion-icon>
+                  {{ terminal.name }}
+                  <ion-badge [color]="getStatusColor(terminal)">
+                    {{ getStatusText(terminal) }}
+                  </ion-badge>
+                </ion-card-title>
+                <p class="terminal-code">{{ terminal.code }} • {{ terminal.location }}</p>
+              </div>
+              <div class="terminal-actions">
+                <ion-button fill="clear" (click)="editTerminal(terminal)">
+                  <ion-icon slot="icon-only" name="create"></ion-icon>
+                </ion-button>
+                <ion-button fill="clear" color="danger" (click)="deleteTerminal(terminal)">
+                  <ion-icon slot="icon-only" name="trash"></ion-icon>
+                </ion-button>
+              </div>
+            </div>
+          </ion-card-header>
+
+          <ion-card-content>
+            <ion-grid>
+              <ion-row>
+                <ion-col size="12" sizeMd="6">
+                  <ion-item lines="none">
+                    <ion-label>Status</ion-label>
+                    <ion-toggle 
+                      [checked]="terminal.active"
+                      (ionChange)="toggleActive(terminal)">
+                    </ion-toggle>
+                  </ion-item>
+                </ion-col>
+
+                <ion-col size="12" sizeMd="6">
+                  <ion-item lines="none">
+                    <ion-label>Terminal Type</ion-label>
+                    <ion-select 
+                      [value]="terminal.terminalType"
+                      (ionChange)="changeTerminalType(terminal, $event)"
+                      interface="popover">
+                      @for (type of terminalTypes; track type.value) {
+                        <ion-select-option [value]="type.value">
+                          {{ type.label }}
+                        </ion-select-option>
+                      }
+                    </ion-select>
+                  </ion-item>
+                </ion-col>
+
+                @if (terminal.terminalType === 'pos') {
+                  <ion-col size="12">
+                    <div class="pos-mode-section">
+                      <h3>POS Mode</h3>
+                      <div class="mode-selector">
+                        @for (mode of posModesOptions; track mode.value) {
+                          <div 
+                            class="mode-card"
+                            [class.selected]="terminal.posMode === mode.value"
+                            (click)="changePosMode(terminal, {detail: {value: mode.value}})">
+                            <div class="mode-name">{{ mode.label }}</div>
+                            <div class="mode-description">{{ mode.description }}</div>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  </ion-col>
+                }
+
+                <ion-col size="12">
+                  <div class="terminal-stats">
+                    <div class="stat-item">
+                      <ion-icon name="wifi"></ion-icon>
+                      <div>
+                        <div class="stat-label">Last Seen</div>
+                        <div class="stat-value">{{ getLastSeenText(terminal) }}</div>
+                      </div>
+                    </div>
+                    @if (terminal.ipAddress) {
+                      <div class="stat-item">
+                        <ion-icon name="desktop"></ion-icon>
+                        <div>
+                          <div class="stat-label">IP Address</div>
+                          <div class="stat-value">{{ terminal.ipAddress }}</div>
+                        </div>
+                      </div>
+                    }
+                    @if (terminal.deviceInfo) {
+                      <div class="stat-item">
+                        <ion-icon name="information-circle"></ion-icon>
+                        <div>
+                          <div class="stat-label">Device</div>
+                          <div class="stat-value">{{ terminal.deviceInfo.browser }} on {{ terminal.deviceInfo.os }}</div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                </ion-col>
+              </ion-row>
+            </ion-grid>
+          </ion-card-content>
+        </ion-card>
+      }
+
+      @if (terminals().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="desktop"></ion-icon>
+          <h2>No Terminals Registered</h2>
+          <p>Register your first terminal to get started</p>
+          <ion-button (click)="createTerminal()">
+            <ion-icon slot="start" name="add"></ion-icon>
+            Register Terminal
+          </ion-button>
+        </div>
+      }
+    </div>
+  }
+</ion-content>

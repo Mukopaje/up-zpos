@@ -1,0 +1,295 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>{{ product.name }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="cancel()">
+        <ion-icon name="close"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  
+  <!-- Tabs -->
+  @if (availableTabs().length > 1) {
+    <ion-toolbar>
+      <ion-segment [(ngModel)]="selectedTab" [value]="selectedTab()">
+        @if (product.variants && product.variants.length > 0) {
+          <ion-segment-button value="variants">
+            <ion-label>Variants</ion-label>
+          </ion-segment-button>
+        }
+        @if (product.portions && product.portions.length > 0) {
+          <ion-segment-button value="portions">
+            <ion-label>Portions</ion-label>
+          </ion-segment-button>
+        }
+        @if (product.bundles && product.bundles.length > 0) {
+          <ion-segment-button value="bundles">
+            <ion-label>Bundles</ion-label>
+          </ion-segment-button>
+        }
+        @if (modifierGroups.length > 0) {
+          <ion-segment-button value="modifiers">
+            <ion-label>Add-ons</ion-label>
+          </ion-segment-button>
+        }
+      </ion-segment>
+    </ion-toolbar>
+  }
+</ion-header>
+
+<ion-content>
+  <!-- Variants Tab -->
+  @if (selectedTab() === 'variants' && product.variants && product.variants.length > 0) {
+    <div class="options-container">
+      <ion-list>
+        <ion-radio-group [value]="selectedVariant()?.id" (ionChange)="selectVariant($event.detail.value)">
+          @for (variant of product.variants; track variant.id) {
+            @if (variant.active) {
+              <ion-item>
+                <ion-radio [value]="variant" slot="start"></ion-radio>
+                <ion-label>
+                  <h2>{{ variant.name }}</h2>
+                  @if (variant.sku) {
+                    <p>SKU: {{ variant.sku }}</p>
+                  }
+                </ion-label>
+                <ion-note slot="end">
+                  @if (variant.priceModifier > 0) {
+                    +${{ variant.priceModifier.toFixed(2) }}
+                  }
+                  @if (variant.priceModifier < 0) {
+                    -${{ Math.abs(variant.priceModifier).toFixed(2) }}
+                  }
+                  @if (variant.priceModifier === 0) {
+                    Included
+                  }
+                </ion-note>
+              </ion-item>
+            }
+          }
+        </ion-radio-group>
+      </ion-list>
+    </div>
+  }
+
+  <!-- Portions Tab -->
+  @if (selectedTab() === 'portions' && product.portions && product.portions.length > 0) {
+    <div class="options-container">
+      <ion-list>
+        <ion-radio-group [value]="selectedPortion()?.id">
+          @for (portion of product.portions; track portion.id) {
+            @if (portion.active) {
+              <ion-item (click)="selectPortion(portion)">
+                <ion-radio [value]="portion.id" slot="start"></ion-radio>
+                <ion-label>
+                  <h2>{{ portion.name }}</h2>
+                  <p>{{ portion.size }}</p>
+                </ion-label>
+                <ion-note slot="end">
+                  ${{ (product.price * portion.priceMultiplier).toFixed(2) }}
+                </ion-note>
+              </ion-item>
+            }
+          }
+        </ion-radio-group>
+      </ion-list>
+    </div>
+  }
+
+  <!-- Bundles Tab -->
+  @if (selectedTab() === 'bundles' && product.bundles && product.bundles.length > 0) {
+    <div class="options-container">
+      <ion-list>
+        <ion-radio-group [value]="selectedBundle()?.id">
+          @for (bundle of product.bundles; track bundle.id) {
+            @if (bundle.active) {
+              <ion-item (click)="selectBundle(bundle)">
+                <ion-radio [value]="bundle.id" slot="start"></ion-radio>
+                <ion-label>
+                  <h2>{{ bundle.name }}</h2>
+                  <p>{{ bundle.quantity }} {{ bundle.quantity === 1 ? 'item' : 'items' }}</p>
+                </ion-label>
+                <ion-note slot="end">
+                  ${{ (product.price * bundle.priceMultiplier).toFixed(2) }}
+                </ion-note>
+              </ion-item>
+            }
+          }
+        </ion-radio-group>
+      </ion-list>
+    </div>
+  }
+
+  <!-- Modifiers Tab -->
+  @if (selectedTab() === 'modifiers' && modifierGroups.length > 0) {
+    <div class="options-container">
+      @for (group of modifierGroups; track group._id) {
+        <ion-list>
+          <ion-list-header>
+            <ion-label>
+              {{ group.name }}
+              @if (group.required) {
+                <ion-text color="danger">*</ion-text>
+              }
+            </ion-label>
+            <ion-note>
+              {{ group.multiSelect ? 'Select multiple' : 'Select one' }}
+            </ion-note>
+          </ion-list-header>
+          
+          @if (group.multiSelect) {
+            <!-- Multi-select: Checkboxes -->
+            @for (option of group.options; track option.id) {
+              @if (option.active) {
+                <ion-item>
+                  <ion-checkbox
+                    [checked]="isModifierSelected(option)"
+                    (ionChange)="toggleModifier(group, option)"
+                    slot="start">
+                  </ion-checkbox>
+                  <ion-label>
+                    <h2>{{ option.name }}</h2>
+                  </ion-label>
+                  <ion-note slot="end">
+                    @if (option.price > 0) {
+                      +${{ option.price.toFixed(2) }}
+                    }
+                    @if (option.price === 0) {
+                      Free
+                    }
+                  </ion-note>
+                </ion-item>
+              }
+            }
+          } @else {
+            <!-- Single-select: Radio buttons -->
+            <ion-radio-group>
+              @for (option of group.options; track option.id) {
+                @if (option.active) {
+                  <ion-item (click)="toggleModifier(group, option)">
+                    <ion-radio
+                      [value]="option.id"
+                      slot="start">
+                    </ion-radio>
+                    <ion-label>
+                      <h2>{{ option.name }}</h2>
+                    </ion-label>
+                    <ion-note slot="end">
+                      @if (option.price > 0) {
+                        +${{ option.price.toFixed(2) }}
+                      }
+                      @if (option.price === 0) {
+                        Free
+                      }
+                    </ion-note>
+                  </ion-item>
+                }
+              }
+            </ion-radio-group>
+          }
+        </ion-list>
+      }
+    </div>
+  }
+
+  <!-- Price Preview -->
+  <div class="price-preview">
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>Price Breakdown</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <div class="price-row">
+          <span>Base Price:</span>
+          <span>${{ product.price.toFixed(2) }}</span>
+        </div>
+        
+        @if (selectedVariant()) {
+          <div class="price-row">
+            <span>{{ selectedVariant()!.name }}:</span>
+            <span>
+              @if (selectedVariant()!.priceModifier > 0) {
+                +${{ selectedVariant()!.priceModifier.toFixed(2) }}
+              }
+              @if (selectedVariant()!.priceModifier < 0) {
+                -${{ Math.abs(selectedVariant()!.priceModifier).toFixed(2) }}
+              }
+              @if (selectedVariant()!.priceModifier === 0) {
+                Included
+              }
+            </span>
+          </div>
+        }
+        
+        @if (selectedPortion()) {
+          <div class="price-row">
+            <span>{{ selectedPortion()!.name }} (×{{ selectedPortion()!.priceMultiplier }}):</span>
+            <span>${{ ((product.price + (selectedVariant()?.priceModifier || 0)) * selectedPortion()!.priceMultiplier).toFixed(2) }}</span>
+          </div>
+        }
+        
+        @if (selectedBundle()) {
+          <div class="price-row">
+            <span>{{ selectedBundle()!.name }} (×{{ selectedBundle()!.priceMultiplier }}):</span>
+            <span>${{ (product.price * selectedBundle()!.priceMultiplier).toFixed(2) }}</span>
+          </div>
+        }
+        
+        @if (selectedModifiers().length > 0) {
+          <div class="price-row modifiers-header">
+            <span>Add-ons:</span>
+            <span></span>
+          </div>
+          @for (modifier of selectedModifiers(); track modifier.optionId) {
+            <div class="price-row modifier-item">
+              <span>+ {{ modifier.optionName }}</span>
+              <span>+${{ modifier.price.toFixed(2) }}</span>
+            </div>
+          }
+        }
+        
+        <ion-item-divider></ion-item-divider>
+        
+        <div class="price-row total">
+          <span>Unit Price:</span>
+          <span>${{ calculatedPrice().toFixed(2) }}</span>
+        </div>
+        
+        <div class="price-row total">
+          <span>Quantity:</span>
+          <span>{{ quantity() }}</span>
+        </div>
+        
+        <div class="price-row grand-total">
+          <span>Total:</span>
+          <span>${{ totalPrice().toFixed(2) }}</span>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  </div>
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <!-- Quantity Controls -->
+    <div class="quantity-controls" slot="start">
+      <ion-button fill="outline" size="small" (click)="decrementQuantity()" [disabled]="quantity() <= 1">
+        <ion-icon name="remove"></ion-icon>
+      </ion-button>
+      <ion-label class="quantity-label">{{ quantity() }}</ion-label>
+      <ion-button fill="outline" size="small" (click)="incrementQuantity()">
+        <ion-icon name="add"></ion-icon>
+      </ion-button>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div slot="end">
+      <ion-button fill="clear" (click)="cancel()">
+        Cancel
+      </ion-button>
+      <ion-button (click)="confirm()" [disabled]="!canConfirm()">
+        Add to Cart - ${{ totalPrice().toFixed(2) }}
+      </ion-button>
+    </div>
+  </ion-toolbar>
+</ion-footer>

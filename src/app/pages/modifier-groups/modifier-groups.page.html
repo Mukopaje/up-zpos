@@ -1,0 +1,80 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Modifier Groups</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="createModifierGroup()">
+        <ion-icon name="add"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar
+      placeholder="Search modifier groups..."
+      (ionInput)="filterGroups($event)">
+    </ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  @if (loading()) {
+    <div class="loading-container">
+      <ion-spinner></ion-spinner>
+    </div>
+  } @else {
+    @if (filteredGroups().length === 0) {
+      <div class="empty-state">
+        <ion-icon name="list-outline"></ion-icon>
+        <h2>No Modifier Groups</h2>
+        <p>Create modifier groups to add customizable options to your products</p>
+        <ion-button (click)="createModifierGroup()">
+          <ion-icon name="add" slot="start"></ion-icon>
+          Create Modifier Group
+        </ion-button>
+      </div>
+    } @else {
+      <ion-list>
+        @for (group of filteredGroups(); track group._id) {
+          <ion-item button (click)="editModifierGroup(group)">
+            <ion-label>
+              <h2>{{ group.name }}</h2>
+              <p>
+                {{ group.options.length }} {{ group.options.length === 1 ? 'option' : 'options' }}
+                • {{ group.multiSelect ? 'Multi-select' : 'Single-select' }}
+                @if (group.required) {
+                  • Required
+                }
+              </p>
+              <p>
+                <ion-text color="medium">
+                  Categories: {{ getCategoryNames(group.categories) }}
+                </ion-text>
+              </p>
+              @if (getProductCount(group.products) > 0) {
+                <p>
+                  <ion-text color="medium">
+                    {{ getProductCount(group.products) }} specific {{ getProductCount(group.products) === 1 ? 'product' : 'products' }}
+                  </ion-text>
+                </p>
+              }
+            </ion-label>
+            <ion-buttons slot="end">
+              <ion-button fill="clear" (click)="duplicateModifierGroup(group); $event.stopPropagation()">
+                <ion-icon name="copy-outline"></ion-icon>
+              </ion-button>
+              <ion-button fill="clear" color="danger" (click)="deleteModifierGroup(group); $event.stopPropagation()">
+                <ion-icon name="trash-outline"></ion-icon>
+              </ion-button>
+            </ion-buttons>
+          </ion-item>
+        }
+      </ion-list>
+    }
+  }
+</ion-content>

@@ -1,0 +1,285 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button></ion-back-button>
+    </ion-buttons>
+    <ion-title>Printer Settings</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="saveSettings()">
+        <ion-icon name="checkmark" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Error Alert -->
+  @if (lastError()) {
+    <ion-card color="danger">
+      <ion-card-content>
+        <div class="error-content">
+          <ion-icon name="warning" size="large"></ion-icon>
+          <div>
+            <h3>Error</h3>
+            <p class="ion-text-wrap">{{ lastError() }}</p>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  }
+
+  <!-- Bluetooth Printers Section -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>
+        <ion-icon name="bluetooth"></ion-icon>
+        Bluetooth Printers
+      </ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-button 
+        expand="block" 
+        (click)="scanForPrinters()"
+        [disabled]="isScanning()">
+        <ion-icon name="search" slot="start"></ion-icon>
+        @if (isScanning()) {
+          <ion-spinner name="crescent"></ion-spinner>
+          <span class="ion-margin-start">Scanning...</span>
+        } @else {
+          Scan for Printers
+        }
+      </ion-button>
+
+      @if (availablePrinters().length > 0) {
+        <ion-list class="ion-margin-top">
+          @for (printer of availablePrinters(); track printer.deviceId) {
+            <ion-item>
+              <ion-label>
+                <h2>{{ printer.name }}</h2>
+                <p>{{ printer.model || 'Unknown Model' }}</p>
+                <p class="device-id">ID: {{ printer.deviceId }}</p>
+              </ion-label>
+              
+              @if (defaultPrinter()?.deviceId === printer.deviceId) {
+                <ion-badge slot="end" color="success">
+                  <ion-icon name="checkmark"></ion-icon>
+                  Default
+                </ion-badge>
+              }
+              
+              @if (isConnected() && defaultPrinter()?.deviceId === printer.deviceId) {
+                <ion-button 
+                  slot="end" 
+                  fill="outline" 
+                  color="danger"
+                  (click)="disconnectPrinter()">
+                  Disconnect
+                </ion-button>
+              } @else {
+                <ion-button 
+                  slot="end" 
+                  fill="outline"
+                  (click)="connectToPrinter(printer)">
+                  Connect
+                </ion-button>
+              }
+            </ion-item>
+          }
+        </ion-list>
+      } @else {
+        <div class="empty-state ion-padding">
+          <ion-icon name="bluetooth" size="large" color="medium"></ion-icon>
+          <p>No printers found</p>
+          <p class="ion-text-wrap">
+            Tap "Scan for Printers" to search for nearby Bluetooth printers.
+            Make sure your printer is on and in pairing mode.
+          </p>
+        </div>
+      }
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Connection Status -->
+  @if (isConnected() && defaultPrinter()) {
+    <ion-card color="success">
+      <ion-card-content>
+        <div class="connection-status">
+          <ion-icon name="checkmark" size="large"></ion-icon>
+          <div>
+            <h3>Connected</h3>
+            <p>{{ defaultPrinter()!.name }}</p>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  }
+
+  <!-- Test Print -->
+  @if (isConnected()) {
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>
+          <ion-icon name="print"></ion-icon>
+          Test Print
+        </ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <p class="ion-text-wrap">
+          Send a test receipt to verify printer connectivity and settings.
+        </p>
+        <ion-button 
+          expand="block" 
+          (click)="testPrint()"
+          [disabled]="isPrinting()">
+          <ion-icon name="print" slot="start"></ion-icon>
+          @if (isPrinting()) {
+            <ion-spinner name="crescent"></ion-spinner>
+            <span class="ion-margin-start">Printing...</span>
+          } @else {
+            Print Test Receipt
+          }
+        </ion-button>
+      </ion-card-content>
+    </ion-card>
+  }
+
+  <!-- Receipt Settings -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>
+        <ion-icon name="settings"></ion-icon>
+        Receipt Settings
+      </ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-list>
+        <ion-item>
+          <ion-label position="stacked">Paper Width</ion-label>
+          <ion-select 
+            [value]="settings().paperWidth"
+            (ionChange)="updateSetting('paperWidth', $event.detail.value)">
+            <ion-select-option [value]="32">32 mm</ion-select-option>
+            <ion-select-option [value]="48">48 mm</ion-select-option>
+            <ion-select-option [value]="58">58 mm</ion-select-option>
+            <ion-select-option [value]="80">80 mm</ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <ion-item>
+          <ion-label position="stacked">Font Size</ion-label>
+          <ion-select 
+            [value]="settings().fontSize"
+            (ionChange)="updateSetting('fontSize', $event.detail.value)">
+            <ion-select-option value="small">Small</ion-select-option>
+            <ion-select-option value="normal">Normal</ion-select-option>
+            <ion-select-option value="large">Large</ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <ion-item>
+          <ion-toggle
+            [checked]="settings().autoCut"
+            (ionChange)="updateSetting('autoCut', $event.detail.checked)">
+            Auto Cut Paper
+          </ion-toggle>
+        </ion-item>
+
+        <ion-item>
+          <ion-toggle
+            [checked]="settings().openCashDrawer"
+            (ionChange)="updateSetting('openCashDrawer', $event.detail.checked)">
+            Open Cash Drawer
+          </ion-toggle>
+        </ion-item>
+
+        <ion-item>
+          <ion-toggle
+            [checked]="settings().printLogo"
+            (ionChange)="updateSetting('printLogo', $event.detail.checked)">
+            Print Logo
+          </ion-toggle>
+        </ion-item>
+      </ion-list>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Business Information -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Business Information</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-list>
+        <ion-item>
+          <ion-label position="stacked">Business Name</ion-label>
+          <ion-input
+            type="text"
+            [value]="settings().businessInfo.name"
+            (ionInput)="updateBusinessInfo('name', $event.detail.value || '')">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-label position="stacked">Address</ion-label>
+          <ion-input
+            type="text"
+            [value]="settings().businessInfo.address"
+            (ionInput)="updateBusinessInfo('address', $event.detail.value || '')">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-label position="stacked">Phone</ion-label>
+          <ion-input
+            type="tel"
+            [value]="settings().businessInfo.phone"
+            (ionInput)="updateBusinessInfo('phone', $event.detail.value || '')">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-label position="stacked">Tax Number</ion-label>
+          <ion-input
+            type="text"
+            [value]="settings().businessInfo.taxNumber"
+            (ionInput)="updateBusinessInfo('taxNumber', $event.detail.value || '')">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-label position="stacked">Receipt Footer</ion-label>
+          <ion-textarea
+            rows="3"
+            [value]="settings().businessInfo.footer"
+            (ionInput)="updateBusinessInfo('footer', $event.detail.value || '')"
+            placeholder="Thank you for your business!">
+          </ion-textarea>
+        </ion-item>
+      </ion-list>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Permissions Warning -->
+  @if (!isConnected() && availablePrinters().length === 0) {
+    <ion-card color="warning">
+      <ion-card-content>
+        <div class="warning-content">
+          <ion-icon name="warning" size="large"></ion-icon>
+          <div>
+            <h3>Bluetooth Required</h3>
+            <p class="ion-text-wrap">
+              This app requires Bluetooth permissions to connect to printers.
+              Make sure Bluetooth is enabled on your device and permissions are granted.
+            </p>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  }
+
+  <div class="ion-padding-bottom"></div>
+</ion-content>

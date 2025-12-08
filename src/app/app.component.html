@@ -1,25 +1,55 @@
 <ion-app>
-  <ion-split-pane contentId="main-content">
-    <ion-menu contentId="main-content" type="overlay">
+  <ion-split-pane contentId="main-content" [disabled]="menuCollapsed()">
+    <ion-menu contentId="main-content" type="overlay" [class.collapsed]="menuCollapsed()">
       <ion-content>
         <ion-list id="inbox-list">
-          <ion-list-header>ZPOS</ion-list-header>
-          <ion-note>Point of Sale System</ion-note>
+          <ion-list-header>
+            @if (!menuCollapsed()) {
+              <img src="assets/images/zpos-logo.png" alt="ZPOS" class="menu-logo" />
+            } @else {
+              <ion-icon name="menu-outline" size="large"></ion-icon>
+            }
+            <ion-button fill="clear" size="small" (click)="toggleMenu()" class="collapse-btn">
+              <ion-icon [name]="menuCollapsed() ? 'chevron-forward-outline' : 'chevron-back-outline'" slot="icon-only"></ion-icon>
+            </ion-button>
+          </ion-list-header>
+          
+          @if (!menuCollapsed()) {
+            <ion-note>{{ getUserInfo() }}</ion-note>
+          }
 
-          <ion-menu-toggle auto-hide="false" *ngFor="let p of appPages; let i = index">
-            <ion-item routerDirection="root" [routerLink]="[p.url]" lines="none" detail="false" routerLinkActive="selected">
-              <ion-icon aria-hidden="true" slot="start" [name]="p.icon"></ion-icon>
-              <ion-label>{{ p.title }}</ion-label>
-            </ion-item>
-          </ion-menu-toggle>
+          <div *ngFor="let section of menuSections()" class="menu-section">
+            @if (!menuCollapsed()) {
+              <ion-list-header class="section-header">{{ section.title }}</ion-list-header>
+            }
+            <ion-menu-toggle auto-hide="false" *ngFor="let item of section.items">
+              <ion-item 
+                routerDirection="root" 
+                [routerLink]="[item.url]" 
+                lines="none" 
+                detail="false" 
+                routerLinkActive="selected"
+                [title]="item.title"
+              >
+                <ion-icon aria-hidden="true" slot="start" [name]="item.icon"></ion-icon>
+                @if (!menuCollapsed()) {
+                  <ion-label>{{ item.title }}</ion-label>
+                }
+              </ion-item>
+            </ion-menu-toggle>
+          </div>
         </ion-list>
 
         <ion-list id="labels-list">
-          <ion-list-header>Account</ion-list-header>
+          @if (!menuCollapsed()) {
+            <ion-list-header>Account</ion-list-header>
+          }
           
-          <ion-item button (click)="logout()" lines="none" detail="false">
-            <ion-icon aria-hidden="true" slot="start" name="log-out" color="danger"></ion-icon>
-            <ion-label color="danger">Logout</ion-label>
+          <ion-item button (click)="logout()" lines="none" detail="false" [title]="'Logout'">
+            <ion-icon aria-hidden="true" slot="start" name="log-out-outline" color="danger"></ion-icon>
+            @if (!menuCollapsed()) {
+              <ion-label color="danger">Logout</ion-label>
+            }
           </ion-item>
         </ion-list>
       </ion-content>

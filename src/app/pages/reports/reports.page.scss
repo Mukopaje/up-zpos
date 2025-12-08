@@ -1,0 +1,159 @@
+.reports-container {
+  padding: 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.summary-card {
+  margin: 0;
+
+  ion-card-content {
+    padding: 16px;
+  }
+
+  .stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    ion-icon {
+      font-size: 32px;
+      flex-shrink: 0;
+    }
+
+    .stat-info {
+      flex: 1;
+      min-width: 0;
+
+      small {
+        display: block;
+        color: var(--ion-color-medium);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: bold;
+        color: var(--ion-color-dark);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
+ion-card {
+  margin-bottom: 16px;
+
+  ion-card-header {
+    ion-card-title {
+      font-size: 18px;
+      font-weight: 600;
+    }
+  }
+}
+
+.chart-container {
+  position: relative;
+  height: 300px;
+  width: 100%;
+}
+
+ion-list {
+  padding: 0;
+
+  ion-item {
+    --padding-start: 0;
+    --padding-end: 0;
+
+    ion-label {
+      h3 {
+        margin: 0 0 4px 0;
+        font-size: 16px;
+        font-weight: 500;
+      }
+
+      p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--ion-color-medium);
+      }
+    }
+
+    ion-text {
+      strong {
+        font-size: 16px;
+      }
+    }
+
+    ion-badge {
+      font-size: 13px;
+      padding: 6px 12px;
+    }
+  }
+}
+
+.loading-state {
+  text-align: center;
+  padding: 64px 16px;
+  color: var(--ion-color-medium);
+
+  ion-spinner {
+    margin-bottom: 16px;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+  }
+}
+
+// Responsive
+@media (min-width: 768px) {
+  .reports-container {
+    padding: 24px;
+  }
+
+  .summary-grid {
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .summary-card {
+    .stat {
+      ion-icon {
+        font-size: 40px;
+      }
+
+      .stat-info h2 {
+        font-size: 24px;
+      }
+    }
+  }
+
+  ion-card {
+    margin-bottom: 24px;
+  }
+
+  .chart-container {
+    height: 400px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .chart-container {
+    height: 450px;
+  }
+}

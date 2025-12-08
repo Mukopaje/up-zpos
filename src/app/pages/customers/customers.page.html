@@ -1,0 +1,157 @@
+<ion-header [translucent]="true">
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button></ion-back-button>
+    </ion-buttons>
+    <ion-title>Customers</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="addCustomer()">
+        <ion-icon name="add" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <!-- Search and Filters -->
+  <ion-toolbar>
+    <ion-searchbar
+      [(ngModel)]="searchQuery"
+      (ionInput)="onSearchChange($event)"
+      placeholder="Search customers...">
+    </ion-searchbar>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <div class="filter-chips">
+      <ion-chip
+        [class.active]="filterType() === 'all'"
+        (click)="setFilter('all')">
+        <ion-label>All</ion-label>
+      </ion-chip>
+      <ion-chip
+        [class.active]="filterType() === 'active'"
+        (click)="setFilter('active')">
+        <ion-label>Active</ion-label>
+      </ion-chip>
+      <ion-chip
+        [class.active]="filterType() === 'credit'"
+        (click)="setFilter('credit')">
+        <ion-label>With Credit</ion-label>
+      </ion-chip>
+      <ion-chip
+        [class.active]="filterType() === 'balance'"
+        (click)="setFilter('balance')">
+        <ion-icon name="warning" color="danger"></ion-icon>
+        <ion-label>Owe Money</ion-label>
+      </ion-chip>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Summary Card -->
+  @if (filteredCustomers().length > 0) {
+    <ion-card>
+      <ion-card-content>
+        <div class="summary">
+          <div class="summary-item">
+            <ion-icon name="person" color="primary"></ion-icon>
+            <div>
+              <h3>{{ filteredCustomers().length }}</h3>
+              <p>Customers</p>
+            </div>
+          </div>
+          <div class="summary-item">
+            <ion-icon name="card" color="danger"></ion-icon>
+            <div>
+              <h3>{{ formatCurrency(totalBalance()) }}</h3>
+              <p>Total Owed</p>
+            </div>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  }
+
+  <!-- Loading State -->
+  @if (isLoading()) {
+    <div class="loading-container">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading customers...</p>
+    </div>
+  }
+
+  <!-- Customer List -->
+  @if (!isLoading() && filteredCustomers().length > 0) {
+    <ion-list>
+      @for (customer of filteredCustomers(); track customer._id) {
+        <ion-item button (click)="viewCustomerDetails(customer)">
+          <ion-icon name="person" slot="start" [color]="customer.active ? 'primary' : 'medium'"></ion-icon>
+          
+          <ion-label>
+            <h2>{{ customer.name }}</h2>
+            <p>{{ customer.phone }}</p>
+            @if (customer.email) {
+              <p class="customer-email">{{ customer.email }}</p>
+            }
+            @if (customer.creditLimit > 0) {
+              <p class="credit-info">{{ getCreditStatus(customer) }}</p>
+            }
+          </ion-label>
+
+          <div slot="end" class="customer-actions">
+            @if (customer.balance > 0) {
+              <ion-badge [color]="getBalanceColor(customer.balance)">
+                Owes {{ formatCurrency(customer.balance) }}
+              </ion-badge>
+            }
+            
+            <div class="action-buttons">
+              @if (customer.balance > 0) {
+                <ion-button fill="clear" size="small" (click)="recordPayment(customer); $event.stopPropagation()">
+                  <ion-icon name="cash" slot="icon-only"></ion-icon>
+                </ion-button>
+              }
+              
+              <ion-button fill="clear" size="small" (click)="editCustomer(customer); $event.stopPropagation()">
+                <ion-icon name="create" slot="icon-only"></ion-icon>
+              </ion-button>
+              
+              <ion-button fill="clear" size="small" color="danger" (click)="deleteCustomer(customer); $event.stopPropagation()">
+                <ion-icon name="trash" slot="icon-only"></ion-icon>
+              </ion-button>
+            </div>
+          </div>
+        </ion-item>
+      }
+    </ion-list>
+  }
+
+  <!-- Empty State -->
+  @if (!isLoading() && filteredCustomers().length === 0) {
+    <div class="empty-state">
+      <ion-icon name="person" size="large" color="medium"></ion-icon>
+      @if (searchQuery()) {
+        <h2>No matching customers</h2>
+        <p>Try a different search term</p>
+      } @else {
+        <h2>No customers yet</h2>
+        <p>Add your first customer to get started</p>
+        <ion-button (click)="addCustomer()">
+          <ion-icon name="add" slot="start"></ion-icon>
+          Add Customer
+        </ion-button>
+      }
+    </div>
+  }
+
+  <!-- Floating Action Button -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button (click)="addCustomer()">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

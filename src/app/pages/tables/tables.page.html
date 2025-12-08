@@ -1,0 +1,182 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/terminals"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Tables Management</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="createTable()">
+        <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <ion-segment [(ngModel)]="filterSection" (ionChange)="filterTables()">
+      <ion-segment-button value="all">
+        <ion-label>All</ion-label>
+      </ion-segment-button>
+      @for (section of sections(); track section) {
+        <ion-segment-button [value]="section">
+          <ion-label>{{ section }}</ion-label>
+        </ion-segment-button>
+      }
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="tables-container">
+    @if (filteredTables().length === 0) {
+      <div class="empty-state">
+        <ion-icon name="restaurant-outline"></ion-icon>
+        <h2>No Tables Found</h2>
+        <p>{{ filterSection === 'all' ? 'Create your first table to get started' : 'No tables in this section' }}</p>
+        @if (filterSection === 'all') {
+          <ion-button (click)="createTable()">
+            <ion-icon slot="start" name="add-outline"></ion-icon>
+            Create Table
+          </ion-button>
+        }
+      </div>
+    } @else {
+      <!-- Table Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <ion-icon name="restaurant-outline" color="primary"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ tables().length }}</span>
+            <span class="stat-label">Total Tables</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <ion-icon name="checkmark-circle-outline" color="success"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ getTablesByStatus('free').length }}</span>
+            <span class="stat-label">Available</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <ion-icon name="people-outline" color="warning"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ getTablesByStatus('occupied').length }}</span>
+            <span class="stat-label">Occupied</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <ion-icon name="time-outline" color="tertiary"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ getTablesByStatus('reserved').length }}</span>
+            <span class="stat-label">Reserved</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tables Grid -->
+      <div class="tables-grid">
+        @for (table of filteredTables(); track table._id) {
+          <ion-card [class.occupied]="table.status === 'occupied'" 
+                    [class.reserved]="table.status === 'reserved'"
+                    [class.cleaning]="table.status === 'cleaning'"
+                    [class.inactive]="!table.active">
+            <ion-card-header>
+              <div class="table-header">
+                <div class="table-number">
+                  <ion-icon [name]="getShapeIcon(table.shape)"></ion-icon>
+                  <div>
+                    <ion-card-title>{{ table.number }}</ion-card-title>
+                    @if (table.name) {
+                      <ion-card-subtitle>{{ table.name }}</ion-card-subtitle>
+                    }
+                  </div>
+                </div>
+                <ion-badge [color]="getStatusColor(table.status)">
+                  {{ table.status }}
+                </ion-badge>
+              </div>
+            </ion-card-header>
+
+            <ion-card-content>
+              <div class="table-details">
+                <div class="detail-row">
+                  <ion-icon name="people-outline"></ion-icon>
+                  <span>Capacity: {{ table.capacity }}</span>
+                </div>
+
+                @if (table.section) {
+                  <div class="detail-row">
+                    <ion-icon name="location-outline"></ion-icon>
+                    <span>{{ table.section }}</span>
+                  </div>
+                }
+
+                @if (table.floor) {
+                  <div class="detail-row">
+                    <ion-icon name="layers-outline"></ion-icon>
+                    <span>Floor {{ table.floor }}</span>
+                  </div>
+                }
+
+                @if (table.status === 'occupied' && table.guestName) {
+                  <div class="detail-row guest-info">
+                    <ion-icon name="person-outline" color="primary"></ion-icon>
+                    <span>{{ table.guestName }} ({{ table.guestCount || 0 }} guests)</span>
+                  </div>
+                }
+
+                @if (table.waiterName) {
+                  <div class="detail-row">
+                    <ion-icon name="person-circle-outline"></ion-icon>
+                    <span>Waiter: {{ table.waiterName }}</span>
+                  </div>
+                }
+
+                @if (table.amount > 0) {
+                  <div class="detail-row amount-info">
+                    <ion-icon name="cash-outline" color="success"></ion-icon>
+                    <span>K{{ table.amount.toFixed(2) }}</span>
+                  </div>
+                }
+              </div>
+
+              <div class="table-actions">
+                <ion-button size="small" fill="outline" (click)="editTable(table)">
+                  <ion-icon slot="start" name="create-outline"></ion-icon>
+                  Edit
+                </ion-button>
+
+                @if (table.status === 'free') {
+                  <ion-button size="small" fill="solid" color="success" (click)="occupyTable(table)">
+                    <ion-icon slot="start" name="person-add-outline"></ion-icon>
+                    Seat Guests
+                  </ion-button>
+                } @else if (table.status === 'occupied') {
+                  <ion-button size="small" fill="solid" color="primary" (click)="viewTableOrder(table)">
+                    <ion-icon slot="start" name="receipt-outline"></ion-icon>
+                    View Order
+                  </ion-button>
+                  <ion-button size="small" fill="outline" color="danger" (click)="clearTable(table)">
+                    <ion-icon slot="start" name="close-outline"></ion-icon>
+                    Clear
+                  </ion-button>
+                }
+
+                <ion-button 
+                  size="small" 
+                  [fill]="table.active ? 'solid' : 'outline'"
+                  [color]="table.active ? 'medium' : 'success'"
+                  (click)="toggleActive(table)">
+                  {{ table.active ? 'Deactivate' : 'Activate' }}
+                </ion-button>
+
+                <ion-button size="small" fill="outline" color="danger" (click)="deleteTable(table)">
+                  <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                </ion-button>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        }
+      </div>
+    }
+  </div>
+</ion-content>

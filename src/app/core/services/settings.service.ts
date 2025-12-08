@@ -11,12 +11,25 @@ export interface AppMode {
 
 export interface AppSettings {
   mode: AppMode;
+  businessName?: string;
+  businessType?: string;
+  defaultPosMode?: 'retail' | 'category' | 'hospitality';
+  address?: string;
+  phone?: string;
+  email?: string;
   language: string;
   currency: string;
   taxRate: number;
+  receiptHeader?: string;
+  receiptFooter?: string;
+  autoPrintReceipt?: boolean;
+  showLogoOnReceipt?: boolean;
   printerEnabled: boolean;
   offlineMode: boolean;
   theme: 'light' | 'dark' | 'auto';
+  // POS tile appearance settings
+  categoryTileBackgroundColor?: string;
+  productTileBackgroundColor?: string;
 }
 
 @Injectable({
@@ -33,12 +46,24 @@ export class SettingsService {
       restaurant: false,
       distributor: false
     },
+    businessName: 'ZPOS',
+    businessType: 'retail',
+    defaultPosMode: 'category',
+    address: '',
+    phone: '',
+    email: '',
     language: 'en',
     currency: 'ZMW',
     taxRate: 16,
+    receiptHeader: 'Thank you for your purchase!',
+    receiptFooter: 'Please visit again!',
+    autoPrintReceipt: false,
+    showLogoOnReceipt: true,
     printerEnabled: true,
     offlineMode: true,
-    theme: 'auto'
+    theme: 'auto',
+    categoryTileBackgroundColor: '#FF9800',
+    productTileBackgroundColor: '#4CAF50'
   });
 
   // Public signals
@@ -93,5 +118,19 @@ export class SettingsService {
     } else {
       document.body.classList.toggle('dark', theme === 'dark');
     }
+  }
+
+  /**
+   * Get a specific setting by key
+   */
+  async get(key: string): Promise<any> {
+    return await this.storage.get(key);
+  }
+
+  /**
+   * Set a specific setting by key
+   */
+  async set(key: string, value: any): Promise<void> {
+    await this.storage.set(key, value);
   }
 }

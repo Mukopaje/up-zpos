@@ -1,0 +1,139 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Select Customer</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="cancel()">
+        <ion-icon name="close" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar
+      placeholder="Search by name, phone, or email"
+      [debounce]="300"
+      (ionInput)="onSearchChange($event)"
+    ></ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="customer-select-content">
+    <!-- Add New Customer Button -->
+    <ion-button
+      expand="block"
+      (click)="toggleAddForm()"
+      class="add-customer-btn"
+    >
+      <ion-icon name="add" slot="start"></ion-icon>
+      {{ showAddForm() ? 'Cancel' : 'Add New Customer' }}
+    </ion-button>
+
+    <!-- Add Customer Form -->
+    @if (showAddForm()) {
+      <ion-card class="add-customer-card">
+        <ion-card-header>
+          <ion-card-title>New Customer</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-item>
+            <ion-label position="stacked">Name *</ion-label>
+            <ion-input
+              [(ngModel)]="newCustomer().name"
+              placeholder="Enter customer name"
+            ></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Phone *</ion-label>
+            <ion-input
+              [(ngModel)]="newCustomer().phone"
+              type="tel"
+              placeholder="Enter phone number"
+            ></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Email</ion-label>
+            <ion-input
+              [(ngModel)]="newCustomer().email"
+              type="email"
+              placeholder="Enter email (optional)"
+            ></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Credit Limit</ion-label>
+            <ion-input
+              [(ngModel)]="newCustomer().creditLimit"
+              type="number"
+              placeholder="0"
+            ></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Address</ion-label>
+            <ion-input
+              [(ngModel)]="newCustomer().address"
+              placeholder="Enter address (optional)"
+            ></ion-input>
+          </ion-item>
+
+          <ion-button
+            expand="block"
+            (click)="addNewCustomer()"
+            class="ion-margin-top"
+          >
+            Add Customer
+          </ion-button>
+        </ion-card-content>
+      </ion-card>
+    }
+
+    <!-- Customer List -->
+    <ion-list>
+      @if (filteredCustomers().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="person" size="large"></ion-icon>
+          <p>No customers found</p>
+        </div>
+      }
+
+      @for (customer of filteredCustomers(); track customer._id) {
+        <ion-item
+          button
+          (click)="selectCustomer(customer)"
+          [disabled]="!canAfford(customer)"
+          [class.insufficient-credit]="!canAfford(customer)"
+        >
+          <ion-icon name="person" slot="start" color="primary"></ion-icon>
+          <ion-label>
+            <h2>{{ customer.name }}</h2>
+            <p>
+              <ion-icon name="call" size="small"></ion-icon>
+              {{ customer.phone }}
+            </p>
+            @if (customer.email) {
+              <p>
+                <ion-icon name="mail" size="small"></ion-icon>
+                {{ customer.email }}
+              </p>
+            }
+          </ion-label>
+          <div slot="end" class="credit-info">
+            <ion-text color="medium">
+              <small>Available Credit</small>
+            </ion-text>
+            <ion-text [color]="canAfford(customer) ? 'success' : 'danger'">
+              <strong>{{ getAvailableCredit(customer).toFixed(2) }}</strong>
+            </ion-text>
+            @if (!canAfford(customer)) {
+              <ion-badge color="danger" class="ion-margin-top">
+                Insufficient
+              </ion-badge>
+            }
+          </div>
+        </ion-item>
+      }
+    </ion-list>
+  </div>
+</ion-content>

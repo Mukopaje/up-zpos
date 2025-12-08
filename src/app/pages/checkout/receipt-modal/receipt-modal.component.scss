@@ -1,0 +1,201 @@
+.receipt-content {
+  --background: #1a1a1a;
+}
+
+.receipt-container {
+  max-width: 400px;
+  margin: 20px auto;
+  background: #2a2a2a;
+  padding: 30px 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  color: white;
+}
+
+.receipt-header {
+  text-align: center;
+  margin-bottom: 20px;
+
+  h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.5em;
+    font-weight: bold;
+    color: white;
+  }
+
+  .date {
+    margin: 5px 0;
+    font-size: 0.9em;
+    color: #999;
+  }
+
+  .order-number {
+    margin: 5px 0 0;
+    font-weight: bold;
+    font-size: 1.1em;
+    color: var(--ion-color-primary);
+  }
+}
+
+.divider {
+  border-top: 2px dashed #555;
+  margin: 15px 0;
+}
+
+.items-section {
+  margin: 15px 0;
+}
+
+.item-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+  font-size: 0.95em;
+  color: white;
+
+  .item-info {
+    flex: 1;
+    display: flex;
+    gap: 8px;
+
+    .item-qty {
+      font-weight: bold;
+      min-width: 30px;
+      color: var(--ion-color-primary);
+    }
+
+    .item-name {
+      flex: 1;
+      color: white;
+    }
+  }
+
+  .item-price {
+    font-weight: bold;
+    min-width: 70px;
+    text-align: right;
+    color: white;
+  }
+}
+
+.totals-section {
+  margin: 15px 0;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0;
+  font-size: 0.95em;
+  color: white;
+
+  &.discount {
+    color: #ff6b6b;
+  }
+
+  &.grand-total {
+    font-size: 1.3em;
+    font-weight: bold;
+    margin: 15px 0;
+    color: var(--ion-color-primary);
+
+    span {
+      font-size: 1.1em;
+    }
+  }
+
+  &.payment-info {
+    font-weight: 600;
+    color: white;
+  }
+
+  &.change {
+    font-weight: 600;
+    color: #51cf66;
+  }
+}
+
+.customer-section {
+  margin: 15px 0;
+  font-size: 0.9em;
+  color: #ccc;
+
+  p {
+    margin: 5px 0;
+    
+    strong {
+      color: white;
+    }
+  }
+}
+
+.receipt-footer {
+  text-align: center;
+  margin-top: 30px;
+  padding-top: 15px;
+  border-top: 1px solid #555;
+
+  p {
+    margin: 5px 0;
+    font-size: 0.9em;
+    color: #999;
+    font-style: italic;
+  }
+}
+
+.action-buttons {
+  padding: 16px;
+  background: #1a1a1a;
+  border-top: 1px solid #3a3a3a;
+
+  ion-button {
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+
+  .share-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .whatsapp-btn {
+    --background: #25D366;
+    --background-hover: #20BD5C;
+    --color: white;
+  }
+}
+
+// Print styles
+@media print {
+  ion-header,
+  .action-buttons {
+    display: none !important;
+  }
+
+  .receipt-content {
+    --background: white;
+  }
+
+  .receipt-container {
+    box-shadow: none;
+    margin: 0;
+    padding: 20px;
+    background: white;
+    color: black;
+    
+    .receipt-header h2,
+    .item-row,
+    .total-row,
+    .customer-section,
+    .receipt-footer {
+      color: black;
+    }
+    
+    .divider {
+      border-top-color: #999;
+    }
+  }
+}

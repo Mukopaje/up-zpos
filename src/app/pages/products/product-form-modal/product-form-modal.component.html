@@ -1,0 +1,317 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>{{ mode === 'create' ? 'New Product' : 'Edit Product' }}</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="cancel()">
+        <ion-icon name="close"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  
+  <!-- Tabs -->
+  <ion-toolbar>
+    <ion-segment [(ngModel)]="selectedTab" [value]="selectedTab()">
+      <ion-segment-button value="basic">
+        <ion-label>Basic Info</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="variants">
+        <ion-label>Variants</ion-label>
+        @if (variants().length > 0) {
+          <ion-badge>{{ variants().length }}</ion-badge>
+        }
+      </ion-segment-button>
+      <ion-segment-button value="portions">
+        <ion-label>Portions</ion-label>
+        @if (portions().length > 0) {
+          <ion-badge>{{ portions().length }}</ion-badge>
+        }
+      </ion-segment-button>
+      <ion-segment-button value="bundles">
+        <ion-label>Bundles</ion-label>
+        @if (bundles().length > 0) {
+          <ion-badge>{{ bundles().length }}</ion-badge>
+        }
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Basic Info Tab -->
+  @if (selectedTab() === 'basic') {
+    <div class="form-container">
+      <ion-list>
+        <ion-item>
+          <ion-input
+            label="Product Name"
+            labelPlacement="stacked"
+            placeholder="Enter product name"
+            [(ngModel)]="name"
+            [value]="name()"
+            required>
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-input
+            label="Barcode"
+            labelPlacement="stacked"
+            placeholder="Scan or enter barcode"
+            [(ngModel)]="barcode"
+            [value]="barcode()"
+            required>
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-select
+            label="Category"
+            labelPlacement="stacked"
+            placeholder="Select category"
+            [(ngModel)]="category"
+            [value]="category()"
+            required>
+            @for (cat of categories; track cat._id) {
+              <ion-select-option [value]="cat._id">{{ cat.name }}</ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+
+        <ion-item>
+          <ion-input
+            label="Price"
+            labelPlacement="stacked"
+            type="number"
+            placeholder="0.00"
+            [(ngModel)]="price"
+            [value]="price()"
+            step="0.01"
+            min="0"
+            required>
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-input
+            label="Cost"
+            labelPlacement="stacked"
+            type="number"
+            placeholder="0.00"
+            [(ngModel)]="cost"
+            [value]="cost()"
+            step="0.01"
+            min="0">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-select
+            label="Unit"
+            labelPlacement="stacked"
+            [(ngModel)]="unit"
+            [value]="unit()">
+            <ion-select-option value="each">Each</ion-select-option>
+            <ion-select-option value="kg">Kilogram</ion-select-option>
+            <ion-select-option value="g">Gram</ion-select-option>
+            <ion-select-option value="l">Liter</ion-select-option>
+            <ion-select-option value="ml">Milliliter</ion-select-option>
+            <ion-select-option value="fraction">Fraction</ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <ion-item>
+          <ion-input
+            label="Stock Quantity"
+            labelPlacement="stacked"
+            type="number"
+            placeholder="0"
+            [(ngModel)]="quantity"
+            [value]="quantity()"
+            min="0">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-textarea
+            label="Description"
+            labelPlacement="stacked"
+            placeholder="Product description (optional)"
+            [(ngModel)]="description"
+            [value]="description()"
+            rows="3">
+          </ion-textarea>
+        </ion-item>
+
+        <ion-item>
+          <ion-input
+            label="Tags"
+            labelPlacement="stacked"
+            placeholder="Comma-separated tags (optional)"
+            [(ngModel)]="tags"
+            [value]="tags()">
+          </ion-input>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox [(ngModel)]="active" [checked]="active()">Active</ion-checkbox>
+        </ion-item>
+
+        <ion-item>
+          <ion-checkbox [(ngModel)]="taxable" [checked]="taxable()">Taxable</ion-checkbox>
+        </ion-item>
+      </ion-list>
+    </div>
+  }
+
+  <!-- Variants Tab -->
+  @if (selectedTab() === 'variants') {
+    <div class="options-container">
+      <div class="options-header">
+        <ion-button expand="block" (click)="addVariant()">
+          <ion-icon name="add" slot="start"></ion-icon>
+          Add Variant
+        </ion-button>
+      </div>
+
+      @if (variants().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="cube-outline"></ion-icon>
+          <p>No variants added yet</p>
+          <p class="help-text">Variants are different sizes, colors, or styles of the same product</p>
+        </div>
+      } @else {
+        <ion-list>
+          @for (variant of variants(); track variant.id; let i = $index) {
+            <ion-item>
+              <ion-label>
+                <h2>{{ variant.name }}</h2>
+                @if (variant.sku) {
+                  <p>SKU: {{ variant.sku }}</p>
+                }
+                <p>Price Modifier: 
+                  @if (variant.priceModifier > 0) {
+                    +${{ variant.priceModifier.toFixed(2) }}
+                  }
+                  @if (variant.priceModifier < 0) {
+                    -${{ Math.abs(variant.priceModifier).toFixed(2) }}
+                  }
+                  @if (variant.priceModifier === 0) {
+                    Included
+                  }
+                </p>
+              </ion-label>
+              <ion-checkbox
+                slot="start"
+                [checked]="variant.active"
+                (ionChange)="toggleVariantActive(i)">
+              </ion-checkbox>
+              <ion-button slot="end" fill="clear" (click)="editVariant(variant, i)">
+                <ion-icon name="create-outline"></ion-icon>
+              </ion-button>
+              <ion-button slot="end" fill="clear" color="danger" (click)="deleteVariant(i)">
+                <ion-icon name="trash-outline"></ion-icon>
+              </ion-button>
+            </ion-item>
+          }
+        </ion-list>
+      }
+    </div>
+  }
+
+  <!-- Portions Tab -->
+  @if (selectedTab() === 'portions') {
+    <div class="options-container">
+      <div class="options-header">
+        <ion-button expand="block" (click)="addPortion()">
+          <ion-icon name="add" slot="start"></ion-icon>
+          Add Portion
+        </ion-button>
+      </div>
+
+      @if (portions().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="wine-outline"></ion-icon>
+          <p>No portions added yet</p>
+          <p class="help-text">Portions are different serving sizes (e.g., Shot, Glass, Bottle)</p>
+        </div>
+      } @else {
+        <ion-list>
+          @for (portion of portions(); track portion.id; let i = $index) {
+            <ion-item>
+              <ion-label>
+                <h2>{{ portion.name }}</h2>
+                <p>{{ portion.size }}</p>
+                <p>Multiplier: ×{{ portion.priceMultiplier }} = ${{ (price() * portion.priceMultiplier).toFixed(2) }}</p>
+              </ion-label>
+              <ion-checkbox
+                slot="start"
+                [checked]="portion.active"
+                (ionChange)="togglePortionActive(i)">
+              </ion-checkbox>
+              <ion-button slot="end" fill="clear" (click)="editPortion(portion, i)">
+                <ion-icon name="create-outline"></ion-icon>
+              </ion-button>
+              <ion-button slot="end" fill="clear" color="danger" (click)="deletePortion(i)">
+                <ion-icon name="trash-outline"></ion-icon>
+              </ion-button>
+            </ion-item>
+          }
+        </ion-list>
+      }
+    </div>
+  }
+
+  <!-- Bundles Tab -->
+  @if (selectedTab() === 'bundles') {
+    <div class="options-container">
+      <div class="options-header">
+        <ion-button expand="block" (click)="addBundle()">
+          <ion-icon name="add" slot="start"></ion-icon>
+          Add Bundle
+        </ion-button>
+      </div>
+
+      @if (bundles().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="layers-outline"></ion-icon>
+          <p>No bundles added yet</p>
+          <p class="help-text">Bundles are multi-packs (e.g., Single, 6-Pack, Case)</p>
+        </div>
+      } @else {
+        <ion-list>
+          @for (bundle of bundles(); track bundle.id; let i = $index) {
+            <ion-item>
+              <ion-label>
+                <h2>{{ bundle.name }}</h2>
+                <p>{{ bundle.quantity }} {{ bundle.quantity === 1 ? 'item' : 'items' }}</p>
+                <p>Multiplier: ×{{ bundle.priceMultiplier }} = ${{ (price() * bundle.priceMultiplier).toFixed(2) }}</p>
+              </ion-label>
+              <ion-checkbox
+                slot="start"
+                [checked]="bundle.active"
+                (ionChange)="toggleBundleActive(i)">
+              </ion-checkbox>
+              <ion-button slot="end" fill="clear" (click)="editBundle(bundle, i)">
+                <ion-icon name="create-outline"></ion-icon>
+              </ion-button>
+              <ion-button slot="end" fill="clear" color="danger" (click)="deleteBundle(i)">
+                <ion-icon name="trash-outline"></ion-icon>
+              </ion-button>
+            </ion-item>
+          }
+        </ion-list>
+      }
+    </div>
+  }
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar>
+    <ion-button slot="start" fill="clear" (click)="cancel()">
+      Cancel
+    </ion-button>
+    <ion-button slot="end" (click)="save()" [disabled]="!canSave()">
+      {{ mode === 'create' ? 'Create' : 'Save' }} Product
+    </ion-button>
+  </ion-toolbar>
+</ion-footer>

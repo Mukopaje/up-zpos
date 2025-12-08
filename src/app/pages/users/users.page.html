@@ -1,0 +1,144 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/roles"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Users Management</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="createUser()">
+        <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  
+  <ion-toolbar>
+    <ion-searchbar 
+      placeholder="Search users..."
+      [debounce]="300"
+      (ionInput)="onSearchChange($event)">
+    </ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="users-container">
+    @if (filteredUsers().length === 0) {
+      <div class="empty-state">
+        <ion-icon name="person-outline"></ion-icon>
+        <h2>No Users Found</h2>
+        <p>{{ searchTerm() ? 'Try a different search term' : 'Create your first user to get started' }}</p>
+        @if (!searchTerm()) {
+          <ion-button (click)="createUser()">
+            <ion-icon slot="start" name="add-outline"></ion-icon>
+            Create User
+          </ion-button>
+        }
+      </div>
+    } @else {
+      <div class="users-grid">
+        @for (user of filteredUsers(); track user._id) {
+          <ion-card [class.inactive]="!user.active">
+            <ion-card-header>
+              <div class="user-header">
+                <div class="user-avatar">
+                  @if (user.avatar) {
+                    <img [src]="user.avatar" [alt]="user.firstName" />
+                  } @else {
+                    <div class="avatar-placeholder">
+                      {{ user.firstName.charAt(0) }}{{ user.lastName.charAt(0) }}
+                    </div>
+                  }
+                </div>
+                <div class="user-info">
+                  <ion-card-title>{{ user.firstName }} {{ user.lastName }}</ion-card-title>
+                  <ion-card-subtitle>{{ '@' + user.username }}</ion-card-subtitle>
+                </div>
+                <div class="user-status">
+                  @if (user.active) {
+                    <ion-icon name="checkmark-circle" color="success"></ion-icon>
+                  } @else {
+                    <ion-icon name="close-circle" color="danger"></ion-icon>
+                  }
+                </div>
+              </div>
+            </ion-card-header>
+
+            <ion-card-content>
+              <div class="user-details">
+                <div class="detail-row">
+                  <ion-icon name="shield-outline"></ion-icon>
+                  <span>{{ getRoleName(user.roleId) }}</span>
+                  <ion-badge color="primary">Level {{ getRoleLevel(user.roleId) }}</ion-badge>
+                </div>
+
+                <div class="detail-row">
+                  <ion-icon name="mail-outline"></ion-icon>
+                  <span>{{ user.email }}</span>
+                </div>
+
+                @if (user.phone) {
+                  <div class="detail-row">
+                    <ion-icon name="call-outline"></ion-icon>
+                    <span>{{ user.phone }}</span>
+                  </div>
+                }
+
+                <div class="detail-row">
+                  <ion-icon name="terminal-outline"></ion-icon>
+                  <span>{{ getTerminalCount(user) }}</span>
+                </div>
+
+                <div class="detail-row">
+                  <ion-icon name="time-outline"></ion-icon>
+                  <span>Last login: {{ getLastLoginText(user) }}</span>
+                </div>
+
+                @if (user.pin) {
+                  <div class="detail-row">
+                    <ion-icon name="key-outline"></ion-icon>
+                    <span>PIN configured</span>
+                    <ion-badge color="success">✓</ion-badge>
+                  </div>
+                }
+              </div>
+
+              <div class="user-actions">
+                <ion-button size="small" fill="outline" (click)="editUser(user)">
+                  <ion-icon slot="start" name="create-outline"></ion-icon>
+                  Edit
+                </ion-button>
+
+                <ion-button size="small" fill="outline" (click)="changeRole(user)">
+                  <ion-icon slot="start" name="shield-outline"></ion-icon>
+                  Role
+                </ion-button>
+
+                <ion-button size="small" fill="outline" (click)="changePIN(user)">
+                  <ion-icon slot="start" name="key-outline"></ion-icon>
+                  PIN
+                </ion-button>
+
+                <ion-button size="small" fill="outline" (click)="manageTerminals(user)">
+                  <ion-icon slot="start" name="terminal-outline"></ion-icon>
+                  Terminals
+                </ion-button>
+
+                <ion-button 
+                  size="small" 
+                  [fill]="user.active ? 'solid' : 'outline'"
+                  [color]="user.active ? 'medium' : 'success'"
+                  (click)="toggleActive(user)">
+                  {{ user.active ? 'Deactivate' : 'Activate' }}
+                </ion-button>
+
+                <ion-button size="small" fill="outline" color="danger" (click)="deleteUser(user)">
+                  <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                </ion-button>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        }
+      </div>
+    }
+  </div>
+</ion-content>

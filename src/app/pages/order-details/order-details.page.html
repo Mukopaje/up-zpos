@@ -1,0 +1,205 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/orders"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Order Details</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="printReceipt()" [disabled]="!order()">
+        <ion-icon name="print"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  @if (isLoading()) {
+    <div class="loading-state">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <p>Loading order details...</p>
+    </div>
+  } @else if (order()) {
+    <div class="order-details-container">
+      
+      <!-- Order Header -->
+      <ion-card class="header-card">
+        <ion-card-content>
+          <div class="order-number">
+            <h1>{{ order()!.orderNumber || order()!.invoice_no }}</h1>
+            <ion-badge [color]="getStatusColor(order()!.status)">
+              {{ order()!.status }}
+            </ion-badge>
+          </div>
+          <ion-text color="medium">
+            <p>{{ formatDate(order()!.createdAt) }}</p>
+          </ion-text>
+        </ion-card-content>
+      </ion-card>
+
+      <!-- Customer Info -->
+      @if (order()!.customer) {
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>
+              <ion-icon name="person"></ion-icon>
+              Customer
+            </ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="info-row">
+              <strong>Name:</strong>
+              <span>{{ order()!.customer!.name }}</span>
+            </div>
+            <div class="info-row">
+              <strong>Phone:</strong>
+              <span>{{ order()!.customer!.phone }}</span>
+            </div>
+            @if (order()!.customer!.email) {
+              <div class="info-row">
+                <strong>Email:</strong>
+                <span>{{ order()!.customer!.email }}</span>
+              </div>
+            }
+          </ion-card-content>
+        </ion-card>
+      }
+
+      <!-- Payment Info -->
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>
+            <ion-icon name="card"></ion-icon>
+            Payment
+          </ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <div class="info-row">
+            <strong>Method:</strong>
+            <span>{{ getPaymentMethodLabel(order()!.paymentMethod || order()!.paymentOption) }}</span>
+          </div>
+          <div class="info-row">
+            <strong>Amount Paid:</strong>
+            <span>ZMW {{ order()!.amountPaid | number:'1.2-2' }}</span>
+          </div>
+          @if (order()!.change > 0) {
+            <div class="info-row">
+              <strong>Change:</strong>
+              <span>ZMW {{ order()!.change | number:'1.2-2' }}</span>
+            </div>
+          }
+        </ion-card-content>
+      </ion-card>
+
+      <!-- Order Items -->
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>
+            <ion-icon name="receipt"></ion-icon>
+            Items ({{ order()!.items.length }})
+          </ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-list class="items-list">
+            @for (item of order()!.items; track item.product._id) {
+              <ion-item lines="full">
+                <div class="item-row">
+                  <div class="item-info">
+                    <h3>{{ item.name || item.product.name }}</h3>
+                    <ion-text color="medium">
+                      <p>ZMW {{ item.price | number:'1.2-2' }} × {{ item.quantity || item.Quantity }}</p>
+                    </ion-text>
+                  </div>
+                  <div class="item-actions">
+                    <div class="item-total">
+                      <strong>ZMW {{ (item.total || item.itemTotalPrice) | number:'1.2-2' }}</strong>
+                    </div>
+                    @if (order()!.status === 'completed') {
+                      <ion-button
+                        fill="clear"
+                        size="small"
+                        color="danger"
+                        (click)="processReturn(item)"
+                      >
+                        <ion-icon name="refresh" slot="icon-only"></ion-icon>
+                      </ion-button>
+                    }
+                  </div>
+                </div>
+              </ion-item>
+            }
+          </ion-list>
+        </ion-card-content>
+      </ion-card>
+
+      <!-- Order Summary -->
+      <ion-card class="summary-card">
+        <ion-card-content>
+          <div class="summary-row">
+            <span>Subtotal:</span>
+            <strong>ZMW {{ (order()!.subtotal || order()!.subTotalPrice || 0) | number:'1.2-2' }}</strong>
+          </div>
+          
+          @if ((order()!.tax || order()!.taxAmount || 0) > 0) {
+            <div class="summary-row">
+              <span>Tax:</span>
+              <strong>ZMW {{ (order()!.tax || order()!.taxAmount || 0) | number:'1.2-2' }}</strong>
+            </div>
+          }
+          
+          @if ((order()!.discount || order()!.discountAmount || 0) > 0) {
+            <div class="summary-row discount">
+              <span>Discount:</span>
+              <strong>-ZMW {{ (order()!.discount || order()!.discountAmount || 0) | number:'1.2-2' }}</strong>
+            </div>
+          }
+          
+          <ion-text color="primary">
+            <div class="summary-row total">
+              <span>TOTAL:</span>
+              <strong>ZMW {{ (order()!.total || order()!.grandTotal || 0) | number:'1.2-2' }}</strong>
+            </div>
+          </ion-text>
+        </ion-card-content>
+      </ion-card>
+
+      <!-- Notes -->
+      @if (order()!.notes) {
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Notes</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <p>{{ order()!.notes }}</p>
+          </ion-card-content>
+        </ion-card>
+      }
+
+      <!-- Actions -->
+      @if (order()!.status === 'completed' || order()!.status === 'pending') {
+        <div class="actions-section">
+          <ion-button expand="block" fill="outline" (click)="printReceipt()">
+            <ion-icon name="print" slot="start"></ion-icon>
+            Print Receipt
+          </ion-button>
+          
+          @if (order()!.status !== 'cancelled') {
+            <ion-button expand="block" color="danger" fill="outline" (click)="cancelOrder()">
+              <ion-icon name="close" slot="start"></ion-icon>
+              Cancel Order
+            </ion-button>
+          }
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="empty-state">
+      <ion-icon name="receipt" color="medium"></ion-icon>
+      <h2>Order not found</h2>
+      <p>The requested order could not be found</p>
+      <ion-button (click)="goBack()">
+        <ion-icon name="arrow-back" slot="start"></ion-icon>
+        Go Back
+      </ion-button>
+    </div>
+  }
+</ion-content>

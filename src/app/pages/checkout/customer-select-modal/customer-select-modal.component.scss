@@ -1,0 +1,59 @@
+.customer-select-content {
+  padding: 16px;
+}
+
+.add-customer-btn {
+  margin-bottom: 16px;
+}
+
+.add-customer-card {
+  margin-bottom: 16px;
+
+  ion-item {
+    --padding-start: 0;
+    margin-bottom: 8px;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--ion-color-medium);
+
+  ion-icon {
+    opacity: 0.3;
+    margin-bottom: 16px;
+  }
+
+  p {
+    font-size: 1.1em;
+  }
+}
+
+ion-item {
+  &.insufficient-credit {
+    opacity: 0.6;
+    
+    ion-label {
+      h2 {
+        text-decoration: line-through;
+      }
+    }
+  }
+}
+
+.credit-info {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+
+  small {
+    font-size: 0.75em;
+  }
+
+  strong {
+    font-size: 1.1em;
+  }
+}

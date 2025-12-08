@@ -25,15 +25,19 @@ import {
   IonFab,
   IonFabButton,
   IonChip,
+  IonSpinner,
+  IonFooter,
   MenuController,
   AlertController,
   ToastController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { cart, search, barcode, add, remove, trash, checkmark } from 'ionicons/icons';
+import { cart, search, barcode, add, remove, trash, checkmark, cartOutline } from 'ionicons/icons';
 
-import { Product, CartItem, Category } from '../../../models';
-import { DbService } from '../../../core/services/db.service';
+import { Product, CartItem, Category } from '../../models';
+import { ProductsService } from '../../core/services/products.service';
+import { CartService } from '../../core/services/cart.service';
+import { BarcodeService } from '../../core/services/barcode.service';
 
 @Component({
   selector: 'app-pos-products',
@@ -64,7 +68,9 @@ import { DbService } from '../../../core/services/db.service';
     IonText,
     IonFab,
     IonFabButton,
-    IonChip
+    IonChip,
+    IonSpinner,
+    IonFooter
   ]
 })
 export class PosProductsPage implements OnInit {
@@ -72,15 +78,19 @@ export class PosProductsPage implements OnInit {
   private menuCtrl = inject(MenuController);
   private alertCtrl = inject(AlertController);
   private toastCtrl = inject(ToastController);
-  private dbService = inject(DbService);
+  private productsService = inject(ProductsService);
+  private cartService = inject(CartService);
+  private barcodeService = inject(BarcodeService);
 
   // Reactive state with signals
-  products = signal<Product[]>([]);
-  categories = signal<Category[]>([]);
-  cartItems = signal<CartItem[]>([]);
+  products = this.productsService.products;
+  categories = this.productsService.categories;
+  cartItems = this.cartService.cartItems;
+  cartSummary = this.cartService.summary;
   selectedCategory = signal<string>('all');
   searchQuery = signal<string>('');
-  isLoading = signal<boolean>(false);
+  isLoading = this.productsService.isLoading;
+  isScanning = this.barcodeService.isScanning;
 
   // Computed values
   filteredProducts = computed(() => {
@@ -103,20 +113,21 @@ export class PosProductsPage implements OnInit {
     return filtered;
   });
 
-  cartTotal = computed(() =>
-    this.cartItems().reduce((sum, item) => sum + item.total, 0)
-  );
-
-  cartItemCount = computed(() =>
-    this.cartItems().reduce((sum, item) => sum + item.quantity, 0)
-  );
-
   constructor() {
     this.registerIcons();
   }
 
   private registerIcons() {
-    addIcons({ cart, search, barcode, add, remove, trash, checkmark });
+    addIcons({ 
+      'cart': cart, 
+      'search': search, 
+      'barcode': barcode, 
+      'add': add, 
+      'remove': remove, 
+      'trash': trash, 
+      'checkmark': checkmark, 
+      'cart-outline': cartOutline 
+    });
   }
 
   async ngOnInit() {
@@ -130,20 +141,10 @@ export class PosProductsPage implements OnInit {
   private async loadData() {
     this.isLoading.set(true);
     try {
-      // Load products from database
-      const products = await this.dbService.find<Product>({
-        type: 'product',
-        active: true
-      });
-      this.products.set(products);
-
-      // Load categories
-      const categories = await this.dbService.find<Category>({
-        type: 'category',
-        active: true
-      });
-      this.categories.set(categories);
-
+      // Products and categories are already loaded by the service
+      // Just trigger a refresh
+      await this.productsService.loadProducts();
+      await this.productsService.loadCategories();
     } catch (error) {
       console.error('Error loading data:', error);
       this.showToast('Error loading products');
@@ -156,63 +157,100 @@ export class PosProductsPage implements OnInit {
     this.searchQuery.set(event.detail.value || '');
   }
 
+  /**
+   * Scan barcode
+   */
+  async scanBarcode() {
+    try {
+      const result = await this.barcodeService.scan();
+      
+      if (result) {
+        // Look up product by barcode
+        await this.lookupByBarcode(result.text);
+      } else if (this.barcodeService.scanError()) {
+        // Scanner not available - prompt for manual entry
+        this.manualBarcodeEntry();
+      }
+    } catch (error: any) {
+      console.error('Barcode scan error:', error);
+      this.showToast('Failed to scan barcode');
+    }
+  }
+
+  /**
+   * Lookup product by barcode
+   */
+  async lookupByBarcode(barcode: string) {
+    if (!this.barcodeService.isValidBarcode(barcode)) {
+      this.showToast('Invalid barcode format');
+      return;
+    }
+
+    const product = this.products().find(p => p.barcode === barcode);
+    
+    if (product) {
+      this.addToCart(product);
+      this.showToast(`${product.name} added from barcode scan`);
+    } else {
+      this.showToast(`Product not found: ${this.barcodeService.formatBarcode(barcode)}`);
+    }
+  }
+
+  /**
+   * Manual barcode entry (fallback)
+   */
+  async manualBarcodeEntry() {
+    const alert = await this.alertCtrl.create({
+      header: 'Enter Barcode',
+      message: 'Camera not available. Please enter barcode manually.',
+      inputs: [
+        {
+          name: 'barcode',
+          type: 'text',
+          placeholder: 'Barcode number',
+          attributes: {
+            inputmode: 'numeric'
+          }
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Lookup',
+          handler: (data) => {
+            if (data.barcode) {
+              this.lookupByBarcode(data.barcode);
+            }
+          }
+        }
+      ]
+    });
+
+    await alert.present();
+  }
+
   selectCategory(categoryId: string) {
     this.selectedCategory.set(categoryId);
   }
 
   addToCart(product: Product) {
-    const currentCart = this.cartItems();
-    const existingItemIndex = currentCart.findIndex(
-      item => item.product._id === product._id
-    );
-
-    if (existingItemIndex >= 0) {
-      // Update quantity
-      const updatedCart = [...currentCart];
-      updatedCart[existingItemIndex].quantity++;
-      updatedCart[existingItemIndex].total =
-        updatedCart[existingItemIndex].quantity * product.price;
-      this.cartItems.set(updatedCart);
-    } else {
-      // Add new item
-      const cartItem: CartItem = {
-        product,
-        quantity: 1,
-        price: product.price,
-        discount: 0,
-        tax: product.taxable ? product.price * 0.16 : 0,
-        total: product.price
-      };
-      this.cartItems.set([...currentCart, cartItem]);
-    }
-
+    this.cartService.addItem(product, 1);
     this.showToast(`${product.name} added to cart`);
   }
 
   updateQuantity(item: CartItem, change: number) {
-    const currentCart = this.cartItems();
-    const index = currentCart.findIndex(i => i.product._id === item.product._id);
-
-    if (index >= 0) {
-      const updatedCart = [...currentCart];
-      updatedCart[index].quantity += change;
-
-      if (updatedCart[index].quantity <= 0) {
-        // Remove item
-        updatedCart.splice(index, 1);
-      } else {
-        // Update total
-        updatedCart[index].total =
-          updatedCart[index].quantity * updatedCart[index].price;
-      }
-
-      this.cartItems.set(updatedCart);
+    if (change > 0) {
+      this.cartService.incrementItem(item.product._id, change);
+    } else {
+      this.cartService.decrementItem(item.product._id);
     }
   }
 
   removeFromCart(item: CartItem) {
-    const currentCart = this.cartItems();
-    this.cartItems.set(currentCart.filter(i => i.product._id !== item.product._id));
+    this.cartService.removeItem(item.product._id);
     this.showToast(`${item.product.name} removed from cart`);
   }
 
@@ -229,7 +267,7 @@ export class PosProductsPage implements OnInit {
           text: 'Clear',
           role: 'destructive',
           handler: () => {
-            this.cartItems.set([]);
+            this.cartService.clearCart();
             this.showToast('Cart cleared');
           }
         }
@@ -240,24 +278,17 @@ export class PosProductsPage implements OnInit {
   }
 
   async checkout() {
-    if (this.cartItems().length === 0) {
+    if (!this.cartService.hasItems()) {
       this.showToast('Cart is empty');
       return;
     }
 
-    // Navigate to checkout page with cart data
-    this.router.navigate(['/checkout'], {
-      state: { cartItems: this.cartItems() }
-    });
+    // Navigate to checkout page
+    this.router.navigate(['/checkout']);
   }
 
   openMenu() {
     this.menuCtrl.open();
-  }
-
-  async scanBarcode() {
-    // TODO: Implement Capacitor barcode scanner
-    this.showToast('Barcode scanner not yet implemented');
   }
 
   private async showToast(message: string) {

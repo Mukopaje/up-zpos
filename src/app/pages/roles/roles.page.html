@@ -1,0 +1,142 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Roles & Permissions</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="createRole()">
+        <ion-icon slot="icon-only" name="add"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  @if (loading()) {
+    <div class="loading-container">
+      <ion-spinner></ion-spinner>
+    </div>
+  } @else {
+    <div class="roles-container">
+      @for (role of roles(); track role._id) {
+        <ion-card>
+          <ion-card-header>
+            <div class="role-header">
+              <div>
+                <ion-card-title>
+                  <ion-icon name="shield"></ion-icon>
+                  {{ role.name }}
+                </ion-card-title>
+                <p class="role-description">{{ role.description }}</p>
+              </div>
+              <div class="role-actions">
+                <ion-badge [color]="getLevelColor(role.level)">
+                  Level {{ role.level }}
+                </ion-badge>
+                <ion-button fill="clear" (click)="editRole(role)">
+                  <ion-icon slot="icon-only" name="create"></ion-icon>
+                </ion-button>
+                <ion-button fill="clear" color="danger" (click)="deleteRole(role)">
+                  <ion-icon slot="icon-only" name="trash"></ion-icon>
+                </ion-button>
+              </div>
+            </div>
+          </ion-card-header>
+
+          <ion-card-content>
+            <!-- Capabilities -->
+            <div class="section">
+              <h3>Capabilities</h3>
+              <ion-grid>
+                <ion-row>
+                  <ion-col size="6" sizeMd="4">
+                    <ion-item lines="none">
+                      <ion-label>Give Discounts</ion-label>
+                      <ion-toggle 
+                        [checked]="role.canGiveDiscounts"
+                        (ionChange)="toggleCapability(role, 'canGiveDiscounts')">
+                      </ion-toggle>
+                    </ion-item>
+                  </ion-col>
+                  <ion-col size="6" sizeMd="4">
+                    <ion-item lines="none">
+                      <ion-label>Void Transactions</ion-label>
+                      <ion-toggle 
+                        [checked]="role.canVoidTransactions"
+                        (ionChange)="toggleCapability(role, 'canVoidTransactions')">
+                      </ion-toggle>
+                    </ion-item>
+                  </ion-col>
+                  <ion-col size="6" sizeMd="4">
+                    <ion-item lines="none">
+                      <ion-label>Manage Users</ion-label>
+                      <ion-toggle 
+                        [checked]="role.canManageUsers"
+                        (ionChange)="toggleCapability(role, 'canManageUsers')">
+                      </ion-toggle>
+                    </ion-item>
+                  </ion-col>
+                  <ion-col size="6" sizeMd="4">
+                    <ion-item lines="none">
+                      <ion-label>Requires Approval</ion-label>
+                      <ion-toggle 
+                        [checked]="role.requiresApproval"
+                        (ionChange)="toggleCapability(role, 'requiresApproval')">
+                      </ion-toggle>
+                    </ion-item>
+                  </ion-col>
+                </ion-row>
+              </ion-grid>
+            </div>
+
+            <!-- Permissions Matrix -->
+            <div class="section">
+              <h3>Permissions Matrix</h3>
+              <div class="permissions-matrix">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Module</th>
+                      @for (action of actions; track action) {
+                        <th>{{ action }}</th>
+                      }
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (module of modules; track module.key) {
+                      <tr>
+                        <td class="module-name">{{ module.name }}</td>
+                        @for (action of actions; track action) {
+                          <td class="permission-cell">
+                            <ion-chip 
+                              [color]="hasAction(role, module.key, action) ? 'success' : 'light'"
+                              (click)="toggleModuleAction(role, module.key, action)">
+                              <ion-icon [name]="hasAction(role, module.key, action) ? 'checkmark' : 'close'"></ion-icon>
+                            </ion-chip>
+                          </td>
+                        }
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </ion-card-content>
+        </ion-card>
+      }
+
+      @if (roles().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="shield"></ion-icon>
+          <h2>No Roles Found</h2>
+          <p>Create your first role to get started</p>
+          <ion-button (click)="createRole()">
+            <ion-icon slot="start" name="add"></ion-icon>
+            Create Role
+          </ion-button>
+        </div>
+      }
+    </div>
+  }
+</ion-content>

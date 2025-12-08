@@ -1,0 +1,178 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/tables"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Waiters Management</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="createWaiter()">
+        <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+
+  <ion-toolbar>
+    <ion-searchbar 
+      placeholder="Search waiters..."
+      [debounce]="300"
+      (ionInput)="onSearchChange($event)">
+    </ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="waiters-container">
+    @if (filteredWaiters().length === 0) {
+      <div class="empty-state">
+        <ion-icon name="person-outline"></ion-icon>
+        <h2>No Waiters Found</h2>
+        <p>{{ searchTerm() ? 'Try a different search term' : 'Create your first waiter to get started' }}</p>
+        @if (!searchTerm()) {
+          <ion-button (click)="createWaiter()">
+            <ion-icon slot="start" name="add-outline"></ion-icon>
+            Create Waiter
+          </ion-button>
+        }
+      </div>
+    } @else {
+      <!-- Waiter Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <ion-icon name="person-outline" color="primary"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ waiters().length }}</span>
+            <span class="stat-label">Total Waiters</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <ion-icon name="checkmark-circle-outline" color="success"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ activeWaiters().length }}</span>
+            <span class="stat-label">Active</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <ion-icon name="restaurant-outline" color="warning"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">{{ getTotalActiveTables() }}</span>
+            <span class="stat-label">Tables Serving</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <ion-icon name="cash-outline" color="success"></ion-icon>
+          <div class="stat-info">
+            <span class="stat-value">K{{ getTotalSales().toFixed(2) }}</span>
+            <span class="stat-label">Today's Sales</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Waiters Grid -->
+      <div class="waiters-grid">
+        @for (waiter of filteredWaiters(); track waiter._id) {
+          <ion-card [class.inactive]="!waiter.active">
+            <ion-card-header>
+              <div class="waiter-header">
+                <div class="waiter-avatar">
+                  <div class="avatar-placeholder">
+                    {{ waiter.name.charAt(0) }}
+                  </div>
+                </div>
+                <div class="waiter-info">
+                  <ion-card-title>{{ waiter.name }}</ion-card-title>
+                  @if (waiter.code) {
+                    <ion-card-subtitle>Code: {{ waiter.code }}</ion-card-subtitle>
+                  }
+                </div>
+                <div class="waiter-status">
+                  @if (waiter.active) {
+                    <ion-icon name="checkmark-circle" color="success"></ion-icon>
+                  } @else {
+                    <ion-icon name="close-circle" color="danger"></ion-icon>
+                  }
+                </div>
+              </div>
+            </ion-card-header>
+
+            <ion-card-content>
+              <div class="waiter-details">
+                @if (waiter.section) {
+                  <div class="detail-row">
+                    <ion-icon name="location-outline"></ion-icon>
+                    <span>Section: {{ waiter.section }}</span>
+                  </div>
+                }
+
+                <div class="detail-row">
+                  <ion-icon name="restaurant-outline"></ion-icon>
+                  <span>Active Tables: {{ waiter.currentTables.length }}</span>
+                </div>
+
+                @if (waiter.currentTables.length > 0) {
+                  <div class="detail-row tables-list">
+                    <ion-icon name="list-outline"></ion-icon>
+                    <div class="tables-badges">
+                      @for (tableId of waiter.currentTables; track tableId) {
+                        <ion-badge color="primary">{{ getTableNumber(tableId) }}</ion-badge>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (waiter.stats) {
+                  <div class="stats-section">
+                    <h4>Today's Performance</h4>
+                    
+                    <div class="detail-row">
+                      <ion-icon name="receipt-outline" color="primary"></ion-icon>
+                      <span>Orders: {{ waiter.stats.ordersToday }}</span>
+                    </div>
+
+                    <div class="detail-row">
+                      <ion-icon name="cash-outline" color="success"></ion-icon>
+                      <span>Sales: K{{ waiter.stats.salesTotal.toFixed(2) }}</span>
+                    </div>
+
+                    <div class="detail-row">
+                      <ion-icon name="trending-up-outline" color="tertiary"></ion-icon>
+                      <span>Avg: K{{ waiter.stats.averageOrderValue.toFixed(2) }}</span>
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <div class="waiter-actions">
+                <ion-button size="small" fill="outline" (click)="editWaiter(waiter)">
+                  <ion-icon slot="start" name="create-outline"></ion-icon>
+                  Edit
+                </ion-button>
+
+                <ion-button size="small" fill="outline" (click)="assignSection(waiter)">
+                  <ion-icon slot="start" name="location-outline"></ion-icon>
+                  Section
+                </ion-button>
+
+                <ion-button size="small" fill="outline" (click)="viewTables(waiter)">
+                  <ion-icon slot="start" name="restaurant-outline"></ion-icon>
+                  Tables
+                </ion-button>
+
+                <ion-button 
+                  size="small" 
+                  [fill]="waiter.active ? 'solid' : 'outline'"
+                  [color]="waiter.active ? 'medium' : 'success'"
+                  (click)="toggleActive(waiter)">
+                  {{ waiter.active ? 'Deactivate' : 'Activate' }}
+                </ion-button>
+
+                <ion-button size="small" fill="outline" color="danger" (click)="deleteWaiter(waiter)">
+                  <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                </ion-button>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        }
+      </div>
+    }
+  </div>
+</ion-content>

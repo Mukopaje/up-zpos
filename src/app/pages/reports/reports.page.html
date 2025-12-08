@@ -1,0 +1,424 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-button slot="start" fill="clear" (click)="openMenu()">
+      <ion-icon name="menu"></ion-icon>
+    </ion-button>
+    <ion-title>Reports & Analytics</ion-title>
+    <ion-button slot="end" fill="clear" (click)="exportReport()">
+      <ion-icon name="download"></ion-icon>
+    </ion-button>
+  </ion-toolbar>
+
+  <!-- Report Type Selector -->
+  <ion-toolbar>
+    <ion-segment [value]="selectedReport()" (ionChange)="selectReport($any($event.detail.value))">
+      <ion-segment-button value="sales">
+        <ion-icon name="trending-up"></ion-icon>
+        <ion-label>Sales</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="inventory">
+        <ion-icon name="cube"></ion-icon>
+        <ion-label>Inventory</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="customers">
+        <ion-icon name="people"></ion-icon>
+        <ion-label>Customers</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+
+  <!-- Period Filter -->
+  <ion-toolbar>
+    <ion-segment [value]="selectedPeriod()" (ionChange)="selectPeriod($any($event.detail.value))" scrollable>
+      <ion-segment-button value="today">
+        <ion-label>Today</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="week">
+        <ion-label>Week</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="month">
+        <ion-label>Month</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="year">
+        <ion-label>Year</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="custom">
+        <ion-icon name="calendar"></ion-icon>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  @if (isLoading()) {
+    <div class="loading-state">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <p>Loading report data...</p>
+    </div>
+  } @else {
+    
+    <!-- Sales Report -->
+    @if (selectedReport() === 'sales') {
+      <div class="reports-container">
+        
+        <!-- Summary Cards -->
+        <div class="summary-grid">
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="cash" color="success"></ion-icon>
+                <div class="stat-info">
+                  <small>Total Sales</small>
+                  <h2>ZMW {{ salesSummary().totalSales | number:'1.2-2' }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="cart" color="primary"></ion-icon>
+                <div class="stat-info">
+                  <small>Total Orders</small>
+                  <h2>{{ salesSummary().totalOrders }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="analytics" color="tertiary"></ion-icon>
+                <div class="stat-info">
+                  <small>Avg Order</small>
+                  <h2>ZMW {{ salesSummary().averageOrderValue | number:'1.2-2' }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="trending-up" color="warning"></ion-icon>
+                <div class="stat-info">
+                  <small>Total Tax</small>
+                  <h2>ZMW {{ salesSummary().totalTax | number:'1.2-2' }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </div>
+
+        <!-- Sales Trend Chart -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Sales Trend</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="chart-container">
+              <canvas #salesChart></canvas>
+            </div>
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Top Products Chart -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Top Products by Revenue</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="chart-container">
+              <canvas #productsChart></canvas>
+            </div>
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Top Products List -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Best Sellers</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <ion-list>
+              @for (product of topProducts(); track product.name; let i = $index) {
+                <ion-item lines="full">
+                  <ion-label>
+                    <h3>{{ i + 1 }}. {{ product.name }}</h3>
+                    <p>{{ product.quantity }} units sold</p>
+                  </ion-label>
+                  <ion-text slot="end" color="primary">
+                    <strong>ZMW {{ product.revenue | number:'1.2-2' }}</strong>
+                  </ion-text>
+                </ion-item>
+              }
+            </ion-list>
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+
+    <!-- Inventory Report -->
+    @if (selectedReport() === 'inventory') {
+      <div class="reports-container">
+        
+        <!-- Inventory Summary -->
+        <div class="summary-grid">
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="cube" color="primary"></ion-icon>
+                <div class="stat-info">
+                  <small>Total Products</small>
+                  <h2>{{ productsService.products().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="cash" color="success"></ion-icon>
+                <div class="stat-info">
+                  <small>Inventory Value</small>
+                  <h2>ZMW {{ totalInventoryValue() | number:'1.2-2' }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="alert-circle" color="warning"></ion-icon>
+                <div class="stat-info">
+                  <small>Low Stock Items</small>
+                  <h2>{{ lowStockProducts().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="albums" color="tertiary"></ion-icon>
+                <div class="stat-info">
+                  <small>Categories</small>
+                  <h2>{{ productsService.categories().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </div>
+
+        <!-- Category Distribution -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Inventory by Category</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="chart-container">
+              <canvas #categoryChart></canvas>
+            </div>
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Low Stock Alert -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Low Stock Alert</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (lowStockProducts().length === 0) {
+              <ion-text color="success">
+                <p>All products are well stocked!</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (product of lowStockProducts(); track product._id) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ product.name }}</h3>
+                      <p>{{ product.unit }}</p>
+                    </ion-label>
+                    <ion-badge 
+                      slot="end" 
+                      [color]="product.quantity === 0 ? 'danger' : 'warning'"
+                    >
+                      {{ product.quantity }} left
+                    </ion-badge>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+
+    <!-- Customer Report -->
+    @if (selectedReport() === 'customers') {
+      <div class="reports-container">
+        
+        <!-- Customer Summary -->
+        <div class="summary-grid">
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="people" color="primary"></ion-icon>
+                <div class="stat-info">
+                  <small>Total Customers</small>
+                  <h2>{{ customersService.customers().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="checkmark-circle" color="success"></ion-icon>
+                <div class="stat-info">
+                  <small>Active</small>
+                  <h2>{{ customersService.activeCustomers().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="card" color="warning"></ion-icon>
+                <div class="stat-info">
+                  <small>With Credit</small>
+                  <h2>{{ customersWithCredit().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="cash" color="danger"></ion-icon>
+                <div class="stat-info">
+                  <small>Outstanding</small>
+                  <h2>ZMW {{ totalOutstanding() | number:'1.2-2' }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </div>
+
+        <!-- Top Customers -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Top Customers</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (topCustomers().length === 0) {
+              <ion-text color="medium">
+                <p>No customer data available for selected period</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (customer of topCustomers(); track customer.phone; let i = $index) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ i + 1 }}. {{ customer.name }}</h3>
+                      <p>{{ customer.phone }} • {{ customer.orderCount }} orders</p>
+                    </ion-label>
+                    <ion-text slot="end" color="primary">
+                      <strong>ZMW {{ customer.totalSpent | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Customers with Outstanding Balance -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Customers with Credit Balance</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (customersWithCredit().length === 0) {
+              <ion-text color="success">
+                <p>No outstanding credit balances!</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (customer of customersWithCredit(); track customer._id) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ customer.name }}</h3>
+                      <p>{{ customer.phone }}</p>
+                    </ion-label>
+                    <ion-text slot="end" color="danger">
+                      <strong>ZMW {{ customer.balance | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+  }
+</ion-content>
+
+<!-- Date Range Modal -->
+<ion-modal [isOpen]="showDateModal()" (didDismiss)="showDateModal.set(false)">
+  <ng-template>
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Select Date Range</ion-title>
+        <ion-buttons slot="end">
+          <ion-button (click)="showDateModal.set(false)">
+            <ion-icon name="close"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+    
+    <ion-content class="ion-padding">
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>Start Date</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-datetime
+            [(ngModel)]="startDate"
+            presentation="date"
+            [max]="endDate()"
+          ></ion-datetime>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>End Date</ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          <ion-datetime
+            [(ngModel)]="endDate"
+            presentation="date"
+            [min]="startDate()"
+          ></ion-datetime>
+        </ion-card-content>
+      </ion-card>
+
+      <ion-button expand="block" (click)="applyDateFilter()">
+        Apply Filter
+      </ion-button>
+    </ion-content>
+  </ng-template>
+</ion-modal>

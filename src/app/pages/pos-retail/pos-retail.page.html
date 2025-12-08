@@ -1,0 +1,250 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-button slot="start" fill="clear" (click)="openMenu()">
+      <ion-icon name="menu-outline"></ion-icon>
+    </ion-button>
+    <ion-title>Retail POS</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="loadHeldTransactions()">
+        <ion-icon name="pause-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button>
+        <ion-icon name="person-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content (keydown)="onKeyDown($event)">
+  <ion-split-pane contentId="retail-cart" when="md">
+    <!-- Left: Scanner and Favorites -->
+    <div class="scanner-side">
+      <!-- Barcode Scanner Input -->
+      <div class="barcode-scanner">
+        <ion-searchbar
+          #barcodeInput
+          [(ngModel)]="barcode"
+          (keypress)="onBarcodeKeyPress($event)"
+          placeholder="Scan barcode or type product code..."
+          search-icon="barcode-outline"
+          autocomplete="off"
+          autofocus
+        ></ion-searchbar>
+      </div>
+
+      <!-- Quick Access Favorites -->
+      @if (favorites().length > 0) {
+        <div class="favorites-section">
+          <h3>Quick Access</h3>
+          <ion-grid>
+            <ion-row>
+              @for (product of favorites(); track product._id) {
+                <ion-col size="6" sizeMd="4" sizeLg="3">
+                  <ion-button
+                    expand="block"
+                    fill="outline"
+                    (click)="addToCart(product)"
+                    class="favorite-btn"
+                  >
+                    <div class="favorite-content">
+                      <div class="product-name">{{ product.name }}</div>
+                      <div class="product-price">{{ product.price | currency:'ZMW':'symbol':'1.2-2' }}</div>
+                    </div>
+                  </ion-button>
+                </ion-col>
+              }
+            </ion-row>
+          </ion-grid>
+        </div>
+      }
+    </div>
+
+    <!-- Right: Cart (Always visible on desktop in split pane) -->
+    <div class="cart-sidebar" id="retail-cart">
+      <div class="cart-section">
+        <div class="cart-header">
+          <h2>
+            <ion-icon name="cart-outline"></ion-icon>
+            Cart ({{ cart().length }} items)
+          </h2>
+          @if (cart().length > 0) {
+            <ion-button size="small" fill="clear" color="danger" (click)="clearCart()">
+              <ion-icon name="trash-outline" slot="start"></ion-icon>
+              Clear
+            </ion-button>
+          }
+        </div>
+
+        @if (cart().length === 0) {
+          <div class="empty-cart">
+            <ion-icon name="cart-outline" size="large"></ion-icon>
+            <p>Scan items to add to cart</p>
+            <p class="shortcuts">F1: Scan | F2: Checkout | F3: Hold | F4: Recall</p>
+          </div>
+        } @else {
+          <ion-list class="cart-list">
+            @for (item of cart(); track $index) {
+              <ion-item>
+                <ion-label>
+                  <h2>{{ item.name }}</h2>
+                  <p>{{ item.barcode }}</p>
+                </ion-label>
+                
+                <div class="item-controls" slot="end">
+                  <div class="quantity-controls">
+                    <ion-button size="small" fill="clear" (click)="updateQuantity($index, item.quantity - 1)">
+                      <ion-icon name="remove-outline" slot="icon-only"></ion-icon>
+                    </ion-button>
+                    
+                    <div class="quantity">{{ item.quantity }}</div>
+                    
+                    <ion-button size="small" fill="clear" (click)="updateQuantity($index, item.quantity + 1)">
+                      <ion-icon name="add-outline" slot="icon-only"></ion-icon>
+                    </ion-button>
+                  </div>
+                  
+                  <div class="item-price">
+                    {{ item.total | currency:'ZMW':'symbol':'1.2-2' }}
+                  </div>
+                  
+                  <ion-button size="small" fill="clear" color="danger" (click)="removeItem($index)">
+                    <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+                  </ion-button>
+                </div>
+              </ion-item>
+            }
+          </ion-list>
+
+          <!-- Cart Summary and Actions -->
+          <div class="cart-footer">
+            <div class="totals-section">
+              <div class="total-row">
+                <span>Subtotal:</span>
+                <span>{{ subtotal() | currency:'ZMW':'symbol':'1.2-2' }}</span>
+              </div>
+              <div class="total-row">
+                <span>Tax (16%):</span>
+                <span>{{ tax() | currency:'ZMW':'symbol':'1.2-2' }}</span>
+              </div>
+              @if (discount() > 0) {
+                <div class="total-row discount">
+                  <span>Discount:</span>
+                  <span>-{{ discount() | currency:'ZMW':'symbol':'1.2-2' }}</span>
+                </div>
+              }
+              <div class="total-row grand-total">
+                <span>TOTAL:</span>
+                <span>{{ total() | currency:'ZMW':'symbol':'1.2-2' }}</span>
+              </div>
+            </div>
+            
+            <div class="action-buttons">
+              <ion-button expand="block" size="large" color="success" (click)="openCheckout()">
+                <ion-icon name="checkmark-outline" slot="start"></ion-icon>
+                Checkout (F2)
+              </ion-button>
+              <ion-button expand="block" fill="outline" (click)="holdTransaction()">
+                <ion-icon name="pause-outline" slot="start"></ion-icon>
+                Hold (F3)
+              </ion-button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </ion-split-pane>
+
+<!-- Checkout Modal -->
+@if (showCheckout()) {
+  <div class="modal-overlay" (click)="closeCheckout()">
+    <div class="checkout-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Complete Payment</h2>
+        <ion-button fill="clear" (click)="closeCheckout()">
+          <ion-icon name="close" slot="icon-only"></ion-icon>
+        </ion-button>
+      </div>
+      
+      <div class="modal-content">
+        <div class="amount-display">
+          <div class="label">Amount Due</div>
+          <div class="amount">{{ total() | currency:'ZMW':'symbol':'1.2-2' }}</div>
+        </div>
+        
+        <ion-item>
+          <ion-label position="stacked">Amount Paid</ion-label>
+          <ion-input
+            type="number"
+            [(ngModel)]="amountPaid"
+            (ngModelChange)="onAmountPaidChange()"
+            placeholder="0.00"
+            autofocus
+          ></ion-input>
+        </ion-item>
+        
+        @if (change() > 0) {
+          <div class="change-display">
+            <span>Change:</span>
+            <span class="change-amount">{{ change() | currency:'ZMW':'symbol':'1.2-2' }}</span>
+          </div>
+        }
+        
+        <div class="payment-methods">
+          <ion-button expand="block" (click)="completeSale('cash')">
+            <ion-icon name="cash-outline" slot="start"></ion-icon>
+            Cash
+          </ion-button>
+          <ion-button expand="block" (click)="completeSale('card')">
+            <ion-icon name="card-outline" slot="start"></ion-icon>
+            Card
+          </ion-button>
+          <ion-button expand="block" (click)="completeSale('mobile')">
+            <ion-icon name="phone-portrait-outline" slot="start"></ion-icon>
+            Mobile Money
+          </ion-button>
+        </div>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Held Transactions Modal -->
+@if (showHeldTransactions()) {
+  <div class="modal-overlay" (click)="showHeldTransactions.set(false)">
+    <div class="held-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Held Transactions</h2>
+        <ion-button fill="clear" (click)="showHeldTransactions.set(false)">
+          <ion-icon name="close" slot="icon-only"></ion-icon>
+        </ion-button>
+      </div>
+      
+      <div class="modal-content">
+        @if (heldTransactions().length === 0) {
+          <p class="empty-message">No held transactions</p>
+        } @else {
+          <ion-list>
+            @for (held of heldTransactions(); track held._id) {
+              <ion-item button (click)="recallTransaction(held)">
+                <ion-label>
+                  <h2>{{ held.items.length }} items</h2>
+                  <p>{{ held.heldAt | date:'short' }}</p>
+                </ion-label>
+                <ion-note slot="end">
+                  {{ held.total | currency:'ZMW':'symbol':'1.2-2' }}
+                </ion-note>
+              </ion-item>
+            }
+          </ion-list>
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Toast Messages -->
+@if (showToast()) {
+  <div class="toast-message">
+    {{ toastMessage() }}
+  </div>
+}

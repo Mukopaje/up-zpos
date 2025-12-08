@@ -1,0 +1,204 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-button slot="start" fill="clear" (click)="openMenu()">
+      <ion-icon name="menu-outline"></ion-icon>
+    </ion-button>
+    <ion-title>Products</ion-title>
+    <ion-button slot="end" fill="clear" (click)="toggleViewMode()">
+      <ion-icon [name]="viewMode() === 'grid' ? 'list-outline' : 'grid-outline'"></ion-icon>
+    </ion-button>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Stats Cards -->
+  <div class="stats-container">
+    <ion-grid>
+      <ion-row>
+        <ion-col size="6" sizeMd="3">
+          <ion-card class="stat-card">
+            <ion-card-content>
+              <div class="stat-value">{{ productStats().total }}</div>
+              <div class="stat-label">Total Products</div>
+            </ion-card-content>
+          </ion-card>
+        </ion-col>
+        <ion-col size="6" sizeMd="3">
+          <ion-card class="stat-card warning">
+            <ion-card-content>
+              <div class="stat-value">{{ productStats().lowStock }}</div>
+              <div class="stat-label">Low Stock</div>
+            </ion-card-content>
+          </ion-card>
+        </ion-col>
+        <ion-col size="6" sizeMd="3">
+          <ion-card class="stat-card danger">
+            <ion-card-content>
+              <div class="stat-value">{{ productStats().outOfStock }}</div>
+              <div class="stat-label">Out of Stock</div>
+            </ion-card-content>
+          </ion-card>
+        </ion-col>
+        <ion-col size="6" sizeMd="3">
+          <ion-card class="stat-card success">
+            <ion-card-content>
+              <div class="stat-value">ZMW {{ productStats().value | number:'1.2-2' }}</div>
+              <div class="stat-label">Stock Value</div>
+            </ion-card-content>
+          </ion-card>
+        </ion-col>
+      </ion-row>
+    </ion-grid>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters">
+    <ion-searchbar
+      placeholder="Search by name or barcode..."
+      [debounce]="300"
+      (ionInput)="onSearchChange($event)"
+    ></ion-searchbar>
+
+    <div class="category-chips">
+      <ion-chip
+        [color]="selectedCategory() === 'all' ? 'primary' : 'medium'"
+        (click)="selectCategory('all')"
+      >
+        <ion-label>All Categories</ion-label>
+      </ion-chip>
+      <ion-chip
+        *ngFor="let category of categories()"
+        [color]="selectedCategory() === category._id ? 'primary' : 'medium'"
+        (click)="selectCategory(category._id)"
+      >
+        <ion-label>{{ category.name }}</ion-label>
+      </ion-chip>
+    </div>
+  </div>
+
+  <!-- Grid View -->
+  @if (viewMode() === 'grid') {
+    <div class="products-grid">
+      <ion-grid>
+        <ion-row>
+          <ion-col
+            *ngFor="let product of filteredProducts()"
+            size="6"
+            sizeMd="4"
+            sizeLg="3"
+          >
+            <ion-card class="product-card" [class.inactive]="!product.active">
+              <div 
+                class="product-image" 
+                [style.background-image]="'url(' + (product.imageUrl || 'assets/img/placeholder.png') + ')'"
+              >
+                <ion-badge [color]="getStockStatus(product).color" class="stock-badge">
+                  {{ product.quantity }}
+                </ion-badge>
+              </div>
+              <ion-card-header>
+                <ion-card-title class="product-name">{{ product.name }}</ion-card-title>
+                <div class="product-meta">
+                  <ion-text color="medium">
+                    <small>{{ product.barcode }}</small>
+                  </ion-text>
+                </div>
+              </ion-card-header>
+              <ion-card-content>
+                <div class="product-info">
+                  <div class="price">
+                    <ion-text color="primary">
+                      <strong>ZMW {{ product.price | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </div>
+                  <div class="actions">
+                    <ion-button fill="clear" size="small" (click)="editProduct(product)">
+                      <ion-icon name="create-outline" slot="icon-only"></ion-icon>
+                    </ion-button>
+                    <ion-button fill="clear" size="small" color="danger" (click)="deleteProduct(product)">
+                      <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+                    </ion-button>
+                  </div>
+                </div>
+                <div class="stock-info">
+                  <ion-chip [color]="getStockStatus(product).color" size="small">
+                    <ion-label>{{ getStockStatus(product).label }}</ion-label>
+                  </ion-chip>
+                </div>
+              </ion-card-content>
+            </ion-card>
+          </ion-col>
+        </ion-row>
+      </ion-grid>
+    </div>
+  }
+
+  <!-- List View -->
+  @if (viewMode() === 'list') {
+    <ion-list class="products-list">
+      <ion-item *ngFor="let product of filteredProducts()" [class.inactive]="!product.active">
+        <div class="list-product">
+          <div class="product-main">
+            <div class="product-details">
+              <h3>{{ product.name }}</h3>
+              <p class="meta">{{ product.barcode }}</p>
+              <ion-chip [color]="getStockStatus(product).color" size="small">
+                <ion-label>{{ getStockStatus(product).label }} ({{ product.quantity }})</ion-label>
+              </ion-chip>
+            </div>
+            <div class="product-price">
+              <ion-text color="primary">
+                <h2>ZMW {{ product.price | number:'1.2-2' }}</h2>
+              </ion-text>
+              @if (product.cost) {
+                <p class="cost">Cost: ZMW {{ product.cost | number:'1.2-2' }}</p>
+              }
+            </div>
+          </div>
+          <div class="product-actions">
+            <ion-button fill="outline" size="small" (click)="editProduct(product)">
+              <ion-icon name="create-outline" slot="start"></ion-icon>
+              Edit
+            </ion-button>
+            <ion-button fill="outline" size="small" color="danger" (click)="deleteProduct(product)">
+              <ion-icon name="trash-outline" slot="start"></ion-icon>
+              Delete
+            </ion-button>
+          </div>
+        </div>
+      </ion-item>
+    </ion-list>
+  }
+
+  <!-- Empty State -->
+  @if (filteredProducts().length === 0 && !isLoading()) {
+    <div class="empty-state">
+      <ion-icon name="cube-outline" color="medium"></ion-icon>
+      <h2>No products found</h2>
+      <p>Try adjusting your search or add a new product</p>
+      <ion-button (click)="addProduct()">
+        <ion-icon name="add-outline" slot="start"></ion-icon>
+        Add Product
+      </ion-button>
+    </div>
+  }
+
+  <!-- Loading State -->
+  @if (isLoading()) {
+    <div class="loading-state">
+      <ion-spinner name="crescent" color="primary"></ion-spinner>
+      <p>Loading products...</p>
+    </div>
+  }
+
+  <!-- Floating Add Button -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button color="primary" (click)="addProduct()">
+      <ion-icon name="add-outline"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

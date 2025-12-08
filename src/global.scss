@@ -19,9 +19,33 @@
   box-sizing: border-box;
 }
 
+/* Force ZPOS brand color for primary elements */
+.ion-color-primary {
+  --ion-color-base: #30acb4 !important;
+  --ion-color-base-rgb: 48, 172, 180 !important;
+  --ion-color-contrast: #ffffff !important;
+  --ion-color-contrast-rgb: 255, 255, 255 !important;
+  --ion-color-shade: #2a979e !important;
+  --ion-color-tint: #45b4bc !important;
+}
+
+ion-button[color="primary"] {
+  --background: #30acb4;
+  --background-activated: #2a979e;
+  --background-hover: #2a979e;
+  --color: #ffffff;
+}
+
+ion-toolbar[color="primary"] {
+  --background: #30acb4;
+  --color: #ffffff;
+}
+
 ion-card {
   box-shadow: var(--ion-card-shadow);
   border-radius: var(--ion-border-radius);
+  display: block;
+  margin: 16px 0;
 }
 
 ion-button {

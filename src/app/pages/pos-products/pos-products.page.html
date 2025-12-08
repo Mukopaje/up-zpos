@@ -4,8 +4,12 @@
       <ion-icon name="menu"></ion-icon>
     </ion-button>
     <ion-title>POS - Products</ion-title>
-    <ion-button slot="end" fill="clear" (click)="scanBarcode()">
-      <ion-icon name="barcode"></ion-icon>
+    <ion-button slot="end" fill="clear" (click)="scanBarcode()" [disabled]="isScanning()">
+      @if (isScanning()) {
+        <ion-spinner name="crescent"></ion-spinner>
+      } @else {
+        <ion-icon name="barcode"></ion-icon>
+      }
     </ion-button>
   </ion-toolbar>
 
@@ -93,7 +97,7 @@
   <ion-fab vertical="bottom" horizontal="end" slot="fixed" *ngIf="cartItems().length > 0">
     <ion-fab-button color="primary" (click)="checkout()">
       <ion-icon name="cart"></ion-icon>
-      <ion-badge class="cart-badge" color="danger">{{ cartItemCount() }}</ion-badge>
+      <ion-badge class="cart-badge" color="danger">{{ cartSummary().itemCount }}</ion-badge>
     </ion-fab-button>
   </ion-fab>
 </ion-content>
@@ -106,9 +110,9 @@
         <ion-col size="6">
           <div class="cart-info">
             <ion-text color="medium">
-              <small>{{ cartItemCount() }} item(s)</small>
+              <small>{{ cartSummary().itemCount }} item(s)</small>
             </ion-text>
-            <h2>ZMW {{ cartTotal() | number:'1.2-2' }}</h2>
+            <h2>ZMW {{ cartSummary().total | number:'1.2-2' }}</h2>
           </div>
         </ion-col>
         <ion-col size="6" class="ion-text-right">

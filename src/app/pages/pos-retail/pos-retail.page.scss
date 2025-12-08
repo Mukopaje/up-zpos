@@ -1,0 +1,337 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
+ion-header {
+  ion-toolbar {
+    --background: #2a2a2a;
+    --color: white;
+    --min-height: 56px;
+    --border-color: #3a3a3a;
+  }
+
+  ion-button {
+    --color: white;
+  }
+}
+
+// Split pane layout for desktop
+ion-split-pane {
+  --side-width: 400px;
+}
+
+.scanner-side {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.cart-sidebar {
+  height: 100%;
+  background: var(--ion-color-light);
+  border-left: 1px solid var(--ion-border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.barcode-scanner {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--ion-background-color);
+  padding: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+
+  ion-searchbar {
+    --background: var(--ion-color-light);
+    --border-radius: 8px;
+    font-size: 1.1rem;
+  }
+}
+
+.favorites-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--ion-color-light);
+
+  h3 {
+    margin: 0 0 12px 0;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    color: var(--ion-color-medium);
+  }
+
+  .favorite-btn {
+    height: 60px;
+    margin: 4px 0;
+    
+    .favorite-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      
+      .product-name {
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+        max-width: 100%;
+      }
+      
+      .product-price {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--ion-color-primary);
+      }
+    }
+  }
+}
+
+.cart-section {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+
+  .cart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+
+    h2 {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.2rem;
+    }
+  }
+
+  .empty-cart {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--ion-color-medium);
+
+    ion-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+    }
+
+    p {
+      margin: 8px 0;
+    }
+
+    .shortcuts {
+      font-size: 0.85rem;
+      font-family: monospace;
+      margin-top: 24px;
+    }
+  }
+
+  .cart-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    
+    ion-item {
+      --padding-start: 8px;
+      --inner-padding-end: 8px;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      border: 1px solid var(--ion-color-light);
+    }
+
+    .item-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+
+      .quantity-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        .quantity {
+          min-width: 40px;
+          text-align: center;
+          font-weight: 600;
+          font-size: 1.1rem;
+        }
+      }
+
+      .item-price {
+        min-width: 100px;
+        text-align: right;
+        font-weight: 600;
+        font-size: 1.1rem;
+      }
+    }
+  }
+
+  .cart-footer {
+    margin-top: auto;
+  }
+}
+
+.totals-section {
+  padding: 16px;
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  margin-bottom: 16px;
+
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 1rem;
+
+    &.discount {
+      color: var(--ion-color-danger);
+    }
+
+    &.grand-total {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-top: 8px;
+      padding-top: 12px;
+      border-top: 2px solid var(--ion-color-medium);
+    }
+  }
+}
+
+.action-buttons {
+  padding: 12px 0;
+  display: flex;
+  gap: 12px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.checkout-modal,
+.held-modal {
+  background: var(--ion-background-color);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--ion-color-light);
+
+    h2 {
+      margin: 0;
+      font-size: 1.3rem;
+    }
+  }
+
+  .modal-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+  }
+}
+
+.checkout-modal {
+  .amount-display {
+    text-align: center;
+    margin-bottom: 24px;
+
+    .label {
+      font-size: 0.9rem;
+      color: var(--ion-color-medium);
+      margin-bottom: 8px;
+    }
+
+    .amount {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--ion-color-primary);
+    }
+  }
+
+  .change-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    margin: 16px 0;
+    background: var(--ion-color-success-tint);
+    border-radius: 8px;
+
+    .change-amount {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--ion-color-success);
+    }
+  }
+
+  .payment-methods {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+.held-modal {
+  .empty-message {
+    text-align: center;
+    padding: 40px;
+    color: var(--ion-color-medium);
+  }
+}
+
+.toast-message {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ion-color-success);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 2000;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+// Keyboard-focused mode - minimal UI
+@media (min-width: 1024px) {
+  .favorites-section {
+    display: none; // Hide on desktop, rely on keyboard
+  }
+}
