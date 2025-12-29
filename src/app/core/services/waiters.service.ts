@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Waiter } from '../../models';
-import { DbService } from './db.service';
+import { SqliteService, WaiterRow } from './sqlite.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class WaitersService {
-  private db = inject(DbService);
+  private sqlite = inject(SqliteService);
   
   waiters = signal<Waiter[]>([]);
   loading = signal(false);
@@ -14,10 +14,8 @@ export class WaitersService {
   async loadWaiters(): Promise<void> {
     this.loading.set(true);
     try {
-      const waiters = await this.db.find<Waiter>({
-        type: 'waiter'
-      });
-      
+      const rows = await this.sqlite.getWaiters();
+      const waiters = rows.map(r => this.mapRowToWaiter(r));
       this.waiters.set(waiters);
     } catch (error) {
       console.error('Error loading waiters:', error);
@@ -29,8 +27,8 @@ export class WaitersService {
 
   async getWaiter(id: string): Promise<Waiter | undefined> {
     try {
-      const doc = await this.db.get<Waiter>(id);
-      return doc && doc.type === 'waiter' ? doc : undefined;
+      const row = await this.sqlite.getWaiterById(id);
+      return row ? this.mapRowToWaiter(row) : undefined;
     } catch (error) {
       console.error('Error getting waiter:', error);
       return undefined;
@@ -47,7 +45,7 @@ export class WaitersService {
     };
     
     try {
-      await this.db.put(newWaiter);
+      await this.sqlite.addWaiter(this.mapWaiterToRow(newWaiter));
       await this.loadWaiters();
       return newWaiter;
     } catch (error) {
@@ -58,16 +56,12 @@ export class WaitersService {
 
   async updateWaiter(waiter: Waiter): Promise<void> {
     try {
-      const existing: any = await this.db.get(waiter._id);
-      if (!existing) throw new Error('Waiter not found');
-      
-      const updated = {
+      const updated: Waiter = {
         ...waiter,
-        _rev: existing._rev,
         updatedAt: Date.now()
       };
-      
-      await this.db.put(updated);
+
+      await this.sqlite.updateWaiter(updated._id, this.mapWaiterToRow(updated));
       await this.loadWaiters();
     } catch (error) {
       console.error('Error updating waiter:', error);
@@ -77,10 +71,7 @@ export class WaitersService {
 
   async deleteWaiter(id: string): Promise<void> {
     try {
-      const doc = await this.db.get(id);
-      if (!doc) throw new Error('Waiter not found');
-      
-      await this.db.delete(doc as any);
+      await this.sqlite.deleteWaiter(id);
       await this.loadWaiters();
     } catch (error) {
       console.error('Error deleting waiter:', error);
@@ -136,5 +127,45 @@ export class WaitersService {
   getAvailableWaiters(): Waiter[] {
     // Waiters with no current tables or less than 5 tables
     return this.waiters().filter(w => w.active && w.currentTables.length < 5);
+  }
+
+  private mapRowToWaiter(row: WaiterRow): Waiter {
+    const currentTables: string[] = row.current_tables
+      ? JSON.parse(row.current_tables)
+      : [];
+
+    const stats = row.stats ? JSON.parse(row.stats) : undefined;
+
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    return {
+      _id: row.id!,
+      type: 'waiter',
+      userId: row.user_id,
+      name: row.name,
+      code: row.code || undefined,
+      section: row.section || undefined,
+      active: row.active === undefined ? true : row.active === 1,
+      currentTables,
+      stats,
+      createdAt,
+      updatedAt
+    };
+  }
+
+  private mapWaiterToRow(waiter: Waiter): WaiterRow {
+    return {
+      id: waiter._id,
+      user_id: waiter.userId,
+      name: waiter.name,
+      code: waiter.code,
+      section: waiter.section,
+      active: waiter.active === false ? 0 : 1,
+      current_tables: JSON.stringify(waiter.currentTables || []),
+      stats: waiter.stats ? JSON.stringify(waiter.stats) : null as any,
+      created_at: new Date(waiter.createdAt).toISOString(),
+      updated_at: new Date(waiter.updatedAt).toISOString()
+    };
   }
 }

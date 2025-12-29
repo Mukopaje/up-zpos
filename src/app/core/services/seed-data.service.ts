@@ -1,12 +1,12 @@
 import { Injectable, inject } from '@angular/core';
-import { DbService } from './db.service';
 import { Product, Category } from '../../models';
+import { ProductsService } from './products.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SeedDataService {
-  private db = inject(DbService);
+  private productsService = inject(ProductsService);
 
   /**
    * Seed sample data for testing
@@ -14,11 +14,10 @@ export class SeedDataService {
   async seedSampleData(): Promise<void> {
     try {
       console.log('Checking for existing data...');
-      
-      // Check if we already have data
-      const existingProducts = await this.db.find<Product>({ type: 'product' });
-      
-      if (existingProducts.length > 0) {
+
+      // Check if we already have products in SQLite
+      const existing = await this.productsService.loadProducts();
+      if (existing.length > 0) {
         console.log('Data already exists, skipping seed');
         return;
       }
@@ -331,14 +330,35 @@ export class SeedDataService {
         }
       ];
 
-      // Save categories
+      // Create categories in SQLite via ProductsService and map old IDs
+      const categoryIdMap = new Map<string, string>();
       for (const category of categories) {
-        await this.db.put(category);
+        const created = await this.productsService.createCategory(
+          category.name,
+          category.description || '',
+          category.imageUrl || ''
+        );
+        if (created) {
+          categoryIdMap.set(category._id, created._id);
+        }
       }
 
-      // Save products
+      // Create products in SQLite via ProductsService using mapped category IDs
       for (const product of products) {
-        await this.db.put(product);
+        const categoryId = categoryIdMap.get(product.category) || '';
+        await this.productsService.createProduct(
+          product.name,
+          product.barcode,
+          categoryId,
+          product.price,
+          product.cost,
+          product.quantity,
+          product.imageUrl || '',
+          {
+            description: product.description,
+            taxExempt: !product.taxable
+          }
+        );
       }
 
       console.log('Sample data seeded successfully!');
@@ -354,23 +374,29 @@ export class SeedDataService {
    */
   async clearSampleData(): Promise<void> {
     try {
-      // Delete all products
-      const products = await this.db.find<Product>({ type: 'product' });
+      // Best-effort clearing based on sample names
+      const products = await this.productsService.loadProducts();
+      const categories = await this.productsService.loadCategories();
+
+      const sampleCategoryNames = new Set(categories
+        .filter(c => ['Beverages', 'Snacks', 'Groceries', 'Household'].includes(c.name))
+        .map(c => c._id));
+
+      // Delete sample products
       for (const product of products) {
-        if (product._id.startsWith('PRD_0') && product._rev) { // Only delete sample data with _rev
-          await this.db.delete(product as any);
+        if (sampleCategoryNames.has(product.category)) {
+          await this.productsService.deleteProduct(product._id);
         }
       }
 
-      // Delete all categories
-      const categories = await this.db.find<Category>({ type: 'category' });
+      // Delete sample categories
       for (const category of categories) {
-        if (category._id.startsWith('CAT_0') && category._rev) { // Only delete sample data with _rev
-          await this.db.delete(category as any);
+        if (['Beverages', 'Snacks', 'Groceries', 'Household'].includes(category.name)) {
+          await this.productsService.deleteCategory(category._id);
         }
       }
 
-      console.log('Sample data cleared successfully!');
+      console.log('Sample data cleared successfully from SQLite!');
     } catch (error) {
       console.error('Error clearing sample data:', error);
       throw error;

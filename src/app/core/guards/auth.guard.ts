@@ -6,22 +6,21 @@ export const AuthGuard = async () => {
   const authService = inject(AuthService);
   const router = inject(Router);
 
+  console.log('AuthGuard: Checking authentication...');
+
   // Wait for auth service to initialize
   await authService.waitForInit();
 
-  // First check if license is activated
-  const hasLicense = await authService.hasActiveLicense();
-  if (!hasLicense) {
-    router.navigate(['/license-login']);
-    return false;
-  }
-
-  // Then check if user is authenticated
+  // Check if user is authenticated (includes license validation)
   const isAuthenticated = await authService.isAuthenticated();
+  console.log('AuthGuard: isAuthenticated =', isAuthenticated);
+  
   if (!isAuthenticated) {
-    router.navigate(['/pin-login']);
+    console.log('AuthGuard: Not authenticated, redirecting to /login');
+    router.navigate(['/login']);
     return false;
   }
 
+  console.log('AuthGuard: Access granted');
   return true;
 };

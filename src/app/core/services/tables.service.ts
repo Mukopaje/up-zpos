@@ -1,13 +1,13 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Table, TableSession, CartItem } from '../../models';
-import { DbService } from './db.service';
+import { SqliteService, TableRow } from './sqlite.service';
 import { WaitersService } from './waiters.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class TablesService {
-  private db = inject(DbService);
+  private sqlite = inject(SqliteService);
   private waitersService = inject(WaitersService);
   
   tables = signal<Table[]>([]);
@@ -16,14 +16,8 @@ export class TablesService {
   async loadTables(terminalId?: string): Promise<void> {
     this.loading.set(true);
     try {
-      let tables = await this.db.find<Table>({
-        type: 'table'
-      });
-      
-      if (terminalId) {
-        tables = tables.filter(t => t.terminalId === terminalId);
-      }
-      
+      const rows = await this.sqlite.getTables(terminalId);
+      const tables = rows.map(r => this.mapRowToTable(r));
       this.tables.set(tables);
     } catch (error) {
       console.error('Error loading tables:', error);
@@ -35,8 +29,8 @@ export class TablesService {
 
   async getTable(id: string): Promise<Table | undefined> {
     try {
-      const doc = await this.db.get<Table>(id);
-      return doc && doc.type === 'table' ? doc : undefined;
+      const row = await this.sqlite.getTableById(id);
+      return row ? this.mapRowToTable(row) : undefined;
     } catch (error) {
       console.error('Error getting table:', error);
       return undefined;
@@ -55,9 +49,10 @@ export class TablesService {
     };
     
     try {
-      await this.db.put(newTable);
+      const id = await this.sqlite.addTable(this.mapTableToRow(newTable));
+      const created = { ...newTable, _id: id };
       await this.loadTables();
-      return newTable;
+      return created;
     } catch (error) {
       console.error('Error creating table:', error);
       throw error;
@@ -66,16 +61,12 @@ export class TablesService {
 
   async updateTable(table: Table): Promise<void> {
     try {
-      const existing: any = await this.db.get(table._id);
-      if (!existing) throw new Error('Table not found');
-      
-      const updated = {
+      const updated: Table = {
         ...table,
-        _rev: existing._rev,
         updatedAt: Date.now()
       };
-      
-      await this.db.put(updated);
+
+      await this.sqlite.updateTable(updated._id, this.mapTableToRow(updated));
       await this.loadTables();
     } catch (error) {
       console.error('Error updating table:', error);
@@ -85,10 +76,7 @@ export class TablesService {
 
   async deleteTable(id: string): Promise<void> {
     try {
-      const doc = await this.db.get(id);
-      if (!doc) throw new Error('Table not found');
-      
-      await this.db.delete(doc as any);
+      await this.sqlite.deleteTable(id);
       await this.loadTables();
     } catch (error) {
       console.error('Error deleting table:', error);
@@ -231,5 +219,68 @@ export class TablesService {
     return this.tables()
       .filter(t => t.status === 'occupied')
       .reduce((sum, t) => sum + t.amount, 0);
+  }
+
+  private mapRowToTable(row: TableRow): Table {
+    const position = row.position ? JSON.parse(row.position) : undefined;
+    const items: CartItem[] = row.items ? JSON.parse(row.items) : [];
+
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    return {
+      _id: row.id!,
+      type: 'table',
+      number: row.number,
+      name: row.name || undefined,
+      capacity: row.capacity,
+      section: row.section || undefined,
+      floor: row.floor || undefined,
+      status: row.status as any,
+      shape: row.shape as any,
+      position,
+      sessionId: row.session_id || undefined,
+      guestName: row.guest_name || undefined,
+      guestCount: row.guest_count || undefined,
+      waiterId: row.waiter_id || undefined,
+      waiterName: row.waiter_name || undefined,
+      startTime: row.start_time ? Date.parse(row.start_time) : undefined,
+      orderId: row.order_id || undefined,
+      items,
+      amount: row.amount ?? 0,
+      notes: row.notes || undefined,
+      terminalId: row.terminal_id,
+      active: row.active === undefined ? true : row.active === 1,
+      createdAt,
+      updatedAt
+    };
+  }
+
+  private mapTableToRow(table: Table): TableRow {
+    return {
+      id: table._id,
+      number: table.number,
+      name: table.name,
+      capacity: table.capacity,
+      section: table.section,
+      floor: table.floor,
+      status: table.status,
+      shape: table.shape,
+      position: table.position ? JSON.stringify(table.position) : null as any,
+      session_id: table.sessionId,
+      guest_name: table.guestName,
+      guest_count: table.guestCount,
+      waiter_id: table.waiterId,
+      waiter_name: table.waiterName,
+      start_time: table.startTime ? new Date(table.startTime).toISOString() : null as any,
+      order_id: table.orderId,
+      items: JSON.stringify(table.items || []),
+      amount: table.amount ?? 0,
+      notes: table.notes,
+      terminal_id: table.terminalId,
+      active: table.active === false ? 0 : 1,
+      created_at: new Date(table.createdAt).toISOString(),
+      updated_at: new Date(table.updatedAt).toISOString()
+    };
   }
 }

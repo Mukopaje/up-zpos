@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Role, Permission } from '../../models';
-import { DbService } from './db.service';
+import { SqliteService, RoleRow } from './sqlite.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class RolesService {
-  private db = inject(DbService);
+  private sqlite = inject(SqliteService);
   
   roles = signal<Role[]>([]);
   loading = signal(false);
@@ -138,14 +138,12 @@ export class RolesService {
   async loadRoles(): Promise<void> {
     this.loading.set(true);
     try {
-      const roles = await this.db.find<Role>({
-        type: 'role'
-      });
-      
-      // Initialize default roles if none exist
-      if (roles.length === 0) {
+      const rows = await this.sqlite.getRoles();
+
+      if (!rows || rows.length === 0) {
         await this.initializeDefaultRoles();
       } else {
+        const roles = rows.map(r => this.mapRowToRole(r));
         this.roles.set(roles);
       }
     } catch (error) {
@@ -159,7 +157,7 @@ export class RolesService {
   async initializeDefaultRoles(): Promise<void> {
     try {
       for (const role of this.defaultRoles) {
-        await this.db.put(role);
+        await this.sqlite.addRole(this.mapRoleToRow(role));
       }
       await this.loadRoles();
     } catch (error) {
@@ -170,8 +168,8 @@ export class RolesService {
 
   async getRole(id: string): Promise<Role | undefined> {
     try {
-      const doc = await this.db.get<Role>(id);
-      return doc && doc.type === 'role' ? doc : undefined;
+      const row = await this.sqlite.getRoleById(id);
+      return row ? this.mapRowToRole(row) : undefined;
     } catch (error) {
       console.error('Error getting role:', error);
       return undefined;
@@ -187,7 +185,7 @@ export class RolesService {
     };
     
     try {
-      await this.db.put(newRole);
+      await this.sqlite.addRole(this.mapRoleToRow(newRole));
       await this.loadRoles();
       return newRole;
     } catch (error) {
@@ -198,16 +196,12 @@ export class RolesService {
 
   async updateRole(role: Role): Promise<void> {
     try {
-      const existing: any = await this.db.get(role._id);
-      if (!existing) throw new Error('Role not found');
-      
-      const updated = {
+      const updated: Role = {
         ...role,
-        _rev: existing._rev,
         updatedAt: Date.now()
       };
-      
-      await this.db.put(updated);
+
+      await this.sqlite.updateRole(updated._id, this.mapRoleToRow(updated));
       await this.loadRoles();
     } catch (error) {
       console.error('Error updating role:', error);
@@ -217,10 +211,7 @@ export class RolesService {
 
   async deleteRole(id: string): Promise<void> {
     try {
-      const doc = await this.db.get(id);
-      if (!doc) throw new Error('Role not found');
-      
-      await this.db.delete(doc as any);
+      await this.sqlite.deleteRole(id);
       await this.loadRoles();
     } catch (error) {
       console.error('Error deleting role:', error);
@@ -243,5 +234,51 @@ export class RolesService {
 
   async getRolesByLevel(minLevel: number): Promise<Role[]> {
     return this.roles().filter(r => r.level >= minLevel);
+  }
+
+  private mapRowToRole(row: RoleRow): Role {
+    const permissions: Permission[] = row.permissions
+      ? JSON.parse(row.permissions)
+      : [];
+
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    return {
+      _id: row.id!,
+      type: 'role',
+      name: row.name,
+      description: row.description,
+      permissions,
+      level: row.level,
+      active: row.active === undefined ? true : row.active === 1,
+      canAccessTerminals: (row.can_access_terminals as any) ?? undefined,
+      canManageUsers: row.can_manage_users === 1,
+      canVoidTransactions: row.can_void_transactions === 1,
+      canGiveDiscounts: row.can_give_discounts === 1,
+      maxDiscountPercent: row.max_discount_percent ?? 0,
+      requiresApproval: row.requires_approval === 1,
+      createdAt,
+      updatedAt
+    };
+  }
+
+  private mapRoleToRow(role: Role): RoleRow {
+    return {
+      id: role._id,
+      name: role.name,
+      description: role.description,
+      level: role.level,
+      permissions: JSON.stringify(role.permissions || []),
+      active: role.active === false ? 0 : 1,
+      can_access_terminals: role.canAccessTerminals,
+      can_manage_users: role.canManageUsers ? 1 : 0,
+      can_void_transactions: role.canVoidTransactions ? 1 : 0,
+      can_give_discounts: role.canGiveDiscounts ? 1 : 0,
+      max_discount_percent: role.maxDiscountPercent ?? 0,
+      requires_approval: role.requiresApproval ? 1 : 0,
+      created_at: new Date(role.createdAt).toISOString(),
+      updated_at: new Date(role.updatedAt).toISOString()
+    };
   }
 }

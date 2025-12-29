@@ -18,8 +18,9 @@ import { addIcons } from 'ionicons';
 import { Table, Product, CartItem, Waiter, Order } from '../../models';
 import { TablesService } from '../../core/services/tables.service';
 import { WaitersService } from '../../core/services/waiters.service';
-import { DbService } from '../../core/services/db.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ProductsService } from '../../core/services/products.service';
+import { OrdersService } from '../../core/services/orders.service';
 
 @Component({
   selector: 'app-pos-hospitality',
@@ -38,8 +39,9 @@ import { AuthService } from '../../core/services/auth.service';
 export class PosHospitalityPage implements OnInit {
   private tablesService = inject(TablesService);
   private waitersService = inject(WaitersService);
-  private db = inject(DbService);
   private auth = inject(AuthService);
+  private productsService = inject(ProductsService);
+  private ordersService = inject(OrdersService);
 
   // Signals
   tables = signal<Table[]>([]);
@@ -125,14 +127,12 @@ export class PosHospitalityPage implements OnInit {
   }
 
   async loadProducts() {
-    const products = await this.db.find<Product>({
-      type: 'product',
-      active: true
-    });
+    const products = await this.productsService.loadProducts();
+    const activeProducts = products.filter(p => p.active);
 
-    this.products.set(products);
+    this.products.set(activeProducts);
     
-    const cats = Array.from(new Set(products.map(p => p.category)));
+    const cats = Array.from(new Set(activeProducts.map(p => p.category)));
     this.categories.set(['all', ...cats]);
   }
 
@@ -289,31 +289,26 @@ export class PosHospitalityPage implements OnInit {
     if (!table) return;
 
     // Create order
-    const order: Order = {
-      _id: `order_${Date.now()}`,
-      type: 'order',
-      orderNumber: `TBL-${table.number}-${Date.now()}`,
-      items: table.items,
-      cart: table.items,
-      subtotal: table.items.reduce((sum, item) => sum + (item.total - item.tax), 0),
-      tax: table.items.reduce((sum, item) => sum + item.tax, 0),
-      discount: 0,
-      total: table.amount,
-      grandTotal: table.amount,
-      amountPaid: this.amountPaid(),
-      change: Math.max(0, this.amountPaid() - table.amount),
-      paymentMethod: this.paymentMethod(),
-      status: 'completed',
-      tableId: table._id,
-      waiterId: table.waiterId,
-      createdBy: this.auth.currentUser()?._id || 'unknown',
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      completedAt: Date.now(),
-      terminalId: this.auth.currentTerminal()?._id || 'unknown'
-    };
+    const subtotal = table.items.reduce((sum, item) => sum + (item.total - item.tax), 0);
+    const tax = table.items.reduce((sum, item) => sum + item.tax, 0);
+    const total = table.amount;
+    const amountPaid = this.amountPaid();
 
-    await this.db.put(order);
+    // Create an order via OrdersService so it goes through the unified
+    // SQLite-backed sales flow, using the current cart contents.
+    // Temporarily, we do not attach the table items to the global cart;
+    // instead, we treat this as a simple paid sale with the given totals.
+    await this.ordersService.createOrder({
+      paymentType: this.paymentMethod(),
+      amountPaid,
+      customer: undefined,
+      notes: `Table ${table.number} - hospitality checkout`,
+      payments: [{
+        type: this.paymentMethod(),
+        amount: total,
+        timestamp: Date.now()
+      }]
+    });
 
     // Clear table
     await this.tablesService.clearTable(table._id);

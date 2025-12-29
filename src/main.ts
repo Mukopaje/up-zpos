@@ -1,6 +1,3 @@
-// Polyfill for PouchDB - 'global' is not defined in browser
-(window as any).global = window;
-
 import { enableProdMode, importProvidersFrom } from '@angular/core';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { RouteReuseStrategy, provideRouter, withPreloading, PreloadAllModules } from '@angular/router';
@@ -14,11 +11,12 @@ import { environment } from './environments/environment';
 
 // Core services
 import { StorageService } from './app/core/services/storage.service';
-import { DbService } from './app/core/services/db.service';
 import { AuthService } from './app/core/services/auth.service';
 import { ProductsService } from './app/core/services/products.service';
 import { CustomersService } from './app/core/services/customers.service';
 import { BarcodeService } from './app/core/services/barcode.service';
+import { SqliteService } from './app/core/services/sqlite.service';
+import { SyncService } from './app/core/services/sync.service';
 
 if (environment.production) {
   enableProdMode();
@@ -33,10 +31,11 @@ bootstrapApplication(AppComponent, {
     provideAnimations(),
     // Core services
     StorageService,
-    DbService,
     AuthService,
     ProductsService,
     CustomersService,
-    BarcodeService
+    BarcodeService,
+    SqliteService,
+    SyncService
   ],
 }).catch(err => console.error(err));

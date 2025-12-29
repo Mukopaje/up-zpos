@@ -12,30 +12,22 @@
 
     <ion-card class="login-card">
       <ion-card-header>
-        <ion-card-title>Welcome Back</ion-card-title>
+        <ion-card-title>
+          {{ step === 'license' ? 'Validate License' : 'Enter PIN' }}
+        </ion-card-title>
       </ion-card-header>
 
       <ion-card-content>
-        <form (ngSubmit)="onLogin()">
+        <!-- Step 1: License Validation -->
+        <form *ngIf="step === 'license'" (ngSubmit)="onValidateLicense()">
           <ion-item>
-            <ion-label position="floating">Username</ion-label>
+            <ion-label position="floating">License Key</ion-label>
             <ion-input
               type="text"
-              [(ngModel)]="username"
-              name="username"
+              [(ngModel)]="licenseKey"
+              name="licenseKey"
               required
-              autocomplete="username"
-            ></ion-input>
-          </ion-item>
-
-          <ion-item>
-            <ion-label position="floating">Password</ion-label>
-            <ion-input
-              type="password"
-              [(ngModel)]="password"
-              name="password"
-              required
-              autocomplete="current-password"
+              autocomplete="off"
             ></ion-input>
           </ion-item>
 
@@ -44,15 +36,73 @@
             type="submit"
             color="primary"
             class="ion-margin-top"
-            [disabled]="!username || !password"
+            [disabled]="!licenseKey || licenseKey.length < 10"
+          >
+            Validate License
+          </ion-button>
+
+          <div class="help-text ion-margin-top">
+            <ion-text color="medium">
+              <small>Enter your ZPOS license key to continue</small>
+            </ion-text>
+          </div>
+
+          <div class="register-link ion-margin-top ion-text-center">
+            <ion-text color="medium">
+              <p>Don't have a license key?</p>
+            </ion-text>
+            <ion-button fill="outline" color="primary" routerLink="/register" expand="block">
+              Register Your Business
+            </ion-button>
+          </div>
+        </form>
+
+        <!-- Step 2: PIN Entry -->
+        <form *ngIf="step === 'pin'" (ngSubmit)="onLogin()">
+          <div class="business-info ion-margin-bottom">
+            <ion-text color="primary">
+              <h3>{{ businessName }}</h3>
+            </ion-text>
+          </div>
+
+          <ion-item>
+            <ion-label position="floating">PIN</ion-label>
+            <ion-input
+              type="password"
+              inputmode="numeric"
+              [(ngModel)]="pin"
+              name="pin"
+              required
+              maxlength="6"
+              placeholder="Enter your 4-6 digit PIN"
+              autocomplete="off"
+            ></ion-input>
+          </ion-item>
+
+          <ion-button
+            expand="block"
+            type="submit"
+            color="primary"
+            class="ion-margin-top"
+            [disabled]="!pin || pin.length < 4"
           >
             Login
+          </ion-button>
+
+          <ion-button
+            expand="block"
+            fill="clear"
+            color="medium"
+            (click)="goBack()"
+            class="ion-margin-top"
+          >
+            Change License
           </ion-button>
         </form>
 
         <div class="forgot-password ion-margin-top">
           <ion-text color="medium">
-            <small>Forgot your password? Contact admin</small>
+            <small>Need help? Contact your administrator</small>
           </ion-text>
         </div>
       </ion-card-content>
@@ -60,7 +110,7 @@
 
     <div class="version-info">
       <ion-text color="medium">
-        <small>Version 2.0.0</small>
+        <small>Version 2.0.0 • Multi-Tenant POS</small>
       </ion-text>
     </div>
   </div>

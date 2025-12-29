@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { IonicModule, ModalController, AlertController, ToastController } from '@ionic/angular';
 import { ModifierGroup, Category, Product } from '@app/models';
-import { DbService } from '@app/core/services/db.service';
+import { SqliteService } from '@app/core/services/sqlite.service';
+import { ProductsService } from '@app/core/services/products.service';
 
 @Component({
   selector: 'app-modifier-groups',
@@ -22,10 +23,11 @@ export class ModifierGroupsPage implements OnInit {
   filteredGroups = signal<ModifierGroup[]>([]);
 
   constructor(
-    private dbService: DbService,
     private modalCtrl: ModalController,
     private alertCtrl: AlertController,
-    private toastCtrl: ToastController
+    private toastCtrl: ToastController,
+    private sqlite: SqliteService,
+    private productsService: ProductsService
   ) {}
 
   async ngOnInit() {
@@ -35,17 +37,18 @@ export class ModifierGroupsPage implements OnInit {
   async loadData() {
     this.loading.set(true);
     try {
-      // Load modifier groups
-      const groups = await this.dbService.find<ModifierGroup>({ type: 'modifier-group' });
-      this.modifierGroups.set(groups);
-      this.filteredGroups.set(groups);
+      // Load modifier groups from SQLite
+      await this.sqlite.ensureInitialized();
+      const groups = await this.sqlite.getModifierGroups();
+      this.modifierGroups.set(groups as ModifierGroup[]);
+      this.filteredGroups.set(groups as ModifierGroup[]);
 
-      // Load categories
-      const cats = await this.dbService.find<Category>({ type: 'category' });
+      // Load categories and products via ProductsService (SQLite-backed)
+      const [cats, prods] = await Promise.all([
+        this.productsService.loadCategories(),
+        this.productsService.loadProducts()
+      ]);
       this.categories.set(cats);
-
-      // Load products
-      const prods = await this.dbService.find<Product>({ type: 'product' });
       this.products.set(prods);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -106,7 +109,7 @@ export class ModifierGroupsPage implements OnInit {
             };
 
             try {
-              await this.dbService.put(newGroup);
+              await this.sqlite.addModifierGroup(newGroup);
               await this.loadData();
               await this.showToast('Modifier group created');
               await this.editModifierGroup(newGroup);
@@ -151,10 +154,7 @@ export class ModifierGroupsPage implements OnInit {
           role: 'destructive',
           handler: async () => {
             try {
-              const doc = await this.dbService.get(group._id);
-              if (doc) {
-                await this.dbService.delete(doc as any);
-              }
+              await this.sqlite.deleteModifierGroup(group._id);
               await this.loadData();
               await this.showToast('Modifier group deleted');
             } catch (error) {
@@ -178,7 +178,7 @@ export class ModifierGroupsPage implements OnInit {
     };
 
     try {
-      await this.dbService.put(newGroup);
+      await this.sqlite.addModifierGroup(newGroup);
       await this.loadData();
       await this.showToast('Modifier group duplicated');
     } catch (error) {
@@ -218,7 +218,7 @@ export class ModifierGroupsPage implements OnInit {
 }
 
 // Modal Component for editing modifier group
-import { Component as ModalComponent, Input } from '@angular/core';
+import { Component as ModalComponent, Input, inject } from '@angular/core';
 import { ModifierOption } from '@app/models';
 
 @ModalComponent({
@@ -410,10 +410,11 @@ export class ModifierGroupFormModal implements OnInit {
   selectedProducts = signal<string[]>([]);
   filteredProducts = signal<Product[]>([]);
 
+  private sqlite = inject(SqliteService);
+
   constructor(
     private modalCtrl: ModalController,
     private alertCtrl: AlertController,
-    private dbService: DbService,
     private toastCtrl: ToastController
   ) {}
 
@@ -548,7 +549,7 @@ export class ModifierGroupFormModal implements OnInit {
     };
 
     try {
-      await this.dbService.put(updated);
+      await this.sqlite.updateModifierGroup(updated);
       await this.showToast('Modifier group saved');
       this.modalCtrl.dismiss({ saved: true });
     } catch (error) {

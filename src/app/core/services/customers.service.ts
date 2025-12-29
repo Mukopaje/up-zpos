@@ -1,12 +1,12 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
-import { DbService } from './db.service';
+import { SqliteService, Customer as SqlCustomer } from './sqlite.service';
 import { Customer } from '../../models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CustomersService {
-  private db = inject(DbService);
+  private sqlite = inject(SqliteService);
 
   // Reactive state
   private customersState = signal<Customer[]>([]);
@@ -39,14 +39,36 @@ export class CustomersService {
   }
 
   /**
+   * Map SQLite customer row to app Customer model
+   */
+  private mapSqlCustomerToApp(row: SqlCustomer): Customer {
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    return {
+      _id: row.id || '',
+      type: 'customer',
+      name: row.name,
+      email: row.email || undefined,
+      phone: row.phone || '',
+      address: row.address || undefined,
+      creditLimit: row.credit_limit ?? 0,
+      balance: row.current_balance ?? 0,
+      active: true,
+      createdAt,
+      updatedAt
+    };
+  }
+
+  /**
    * Load all customers from database
    */
   async loadCustomers(): Promise<void> {
     this.isLoadingState.set(true);
     try {
-      const customers = await this.db.find<Customer>({
-        type: 'customer'
-      });
+      await this.sqlite.ensureInitialized();
+      const rows = await this.sqlite.getCustomers();
+      const customers = rows.map(row => this.mapSqlCustomerToApp(row));
       this.customersState.set(customers);
     } catch (error) {
       console.error('Error loading customers:', error);
@@ -60,7 +82,9 @@ export class CustomersService {
    */
   async getCustomer(id: string): Promise<Customer | null> {
     try {
-      return await this.db.get<Customer>(id);
+      await this.sqlite.ensureInitialized();
+      const row = await this.sqlite.getCustomerById(id);
+      return row ? this.mapSqlCustomerToApp(row) : null;
     } catch (error) {
       console.error('Error getting customer:', error);
       return null;
@@ -100,21 +124,27 @@ export class CustomersService {
    * Create new customer
    */
   async createCustomer(data: Omit<Customer, '_id' | '_rev' | 'type' | 'createdAt' | 'updatedAt'>): Promise<Customer> {
-    const customer: Customer = {
-      _id: `customer_${Date.now()}`,
-      type: 'customer',
-      ...data,
-      balance: data.balance || 0,
-      creditLimit: data.creditLimit || 0,
-      active: data.active !== undefined ? data.active : true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-
     try {
-      const saved = await this.db.put(customer);
-      await this.loadCustomers(); // Refresh list
-      return saved;
+      await this.sqlite.ensureInitialized();
+
+      const sqlCustomer: SqlCustomer = {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        credit_limit: data.creditLimit || 0,
+        current_balance: data.balance || 0
+      };
+
+      const id = await this.sqlite.addCustomer(sqlCustomer);
+      await this.loadCustomers();
+
+      const row = await this.sqlite.getCustomerById(id);
+      if (!row) {
+        throw new Error('Failed to load created customer');
+      }
+
+      return this.mapSqlCustomerToApp(row);
     } catch (error) {
       console.error('Error creating customer:', error);
       throw error;
@@ -126,22 +156,26 @@ export class CustomersService {
    */
   async updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
     try {
-      const existing = await this.db.get<Customer>(id);
-      if (!existing) {
-        throw new Error('Customer not found');
-      }
+      await this.sqlite.ensureInitialized();
 
-      const updated: Customer = {
-        ...existing,
-        ...updates,
-        _id: existing._id,
-        type: 'customer',
-        updatedAt: Date.now()
+      const sqlUpdates: Partial<SqlCustomer> = {
+        name: updates.name,
+        email: updates.email,
+        phone: updates.phone,
+        address: updates.address,
+        credit_limit: updates.creditLimit,
+        current_balance: updates.balance
       };
 
-      const saved = await this.db.put(updated);
-      await this.loadCustomers(); // Refresh list
-      return saved;
+      await this.sqlite.updateCustomer(id, sqlUpdates);
+      await this.loadCustomers();
+
+      const row = await this.sqlite.getCustomerById(id);
+      if (!row) {
+        throw new Error('Customer not found after update');
+      }
+
+      return this.mapSqlCustomerToApp(row);
     } catch (error) {
       console.error('Error updating customer:', error);
       throw error;
@@ -153,7 +187,9 @@ export class CustomersService {
    */
   async deleteCustomer(id: string): Promise<void> {
     try {
-      await this.updateCustomer(id, { active: false });
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.deleteCustomer(id);
+      await this.loadCustomers();
     } catch (error) {
       console.error('Error deleting customer:', error);
       throw error;
@@ -165,11 +201,9 @@ export class CustomersService {
    */
   async permanentlyDeleteCustomer(id: string): Promise<void> {
     try {
-      const customer = await this.db.get<Customer>(id);
-      if (customer && customer._rev) {
-        await this.db.delete(customer as Customer & { _rev: string });
-        await this.loadCustomers(); // Refresh list
-      }
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.deleteCustomer(id);
+      await this.loadCustomers();
     } catch (error) {
       console.error('Error permanently deleting customer:', error);
       throw error;
@@ -181,7 +215,7 @@ export class CustomersService {
    */
   async addCredit(customerId: string, amount: number): Promise<Customer> {
     try {
-      const customer = await this.db.get<Customer>(customerId);
+      const customer = await this.getCustomer(customerId);
       if (!customer) {
         throw new Error('Customer not found');
       }
@@ -205,7 +239,7 @@ export class CustomersService {
    */
   async recordPayment(customerId: string, amount: number): Promise<Customer> {
     try {
-      const customer = await this.db.get<Customer>(customerId);
+      const customer = await this.getCustomer(customerId);
       if (!customer) {
         throw new Error('Customer not found');
       }
@@ -261,7 +295,7 @@ export class CustomersService {
    */
   async updateCreditLimit(customerId: string, newLimit: number): Promise<Customer> {
     try {
-      const customer = await this.db.get<Customer>(customerId);
+      const customer = await this.getCustomer(customerId);
       if (!customer) {
         throw new Error('Customer not found');
       }

@@ -1,0 +1,101 @@
+<ion-header>
+  <ion-toolbar color="dark">
+    <ion-buttons slot="start">
+      <ion-button routerLink="/settings">
+        <ion-icon name="arrow-back-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>Categories</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="toggleReorder()">
+        <ion-icon [name]="isReordering() ? 'checkmark-outline' : 'reorder-three-outline'"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+  
+  <ion-toolbar color="dark">
+    <ion-searchbar
+      [(ngModel)]="searchQuery"
+      (ionInput)="onSearchChange()"
+      placeholder="Search categories..."
+      animated="true"
+    ></ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="categories-container">
+    <!-- Empty State -->
+    <div *ngIf="filteredCategories().length === 0 && searchQuery() === ''" class="empty-state">
+      <ion-icon name="apps-outline"></ion-icon>
+      <h2>No Categories</h2>
+      <p>Add your first category to organize products</p>
+      <ion-button (click)="openAddCategoryDialog()">
+        <ion-icon name="add" slot="start"></ion-icon>
+        Add Category
+      </ion-button>
+    </div>
+
+    <!-- Search Empty State -->
+    <div *ngIf="filteredCategories().length === 0 && searchQuery() !== ''" class="empty-state">
+      <ion-icon name="search-outline"></ion-icon>
+      <h2>No Results</h2>
+      <p>No categories match your search</p>
+    </div>
+
+    <!-- Categories List -->
+    <ion-list *ngIf="filteredCategories().length > 0">
+      <ion-reorder-group [disabled]="!isReordering()" (ionItemReorder)="handleReorder($event)">
+        <ion-item *ngFor="let category of filteredCategories()" lines="full">
+          <ion-reorder slot="start" *ngIf="isReordering()"></ion-reorder>
+          
+          <div class="category-icon" [style.background-color]="category.color">
+            <ion-icon [name]="category.icon || 'apps-outline'"></ion-icon>
+          </div>
+
+          <ion-label>
+            <h2>{{ category.name }}</h2>
+            <p *ngIf="category.description">{{ category.description }}</p>
+            <div class="category-meta">
+              <ion-badge *ngIf="category.active" color="success">Active</ion-badge>
+              <ion-badge *ngIf="!category.active" color="medium">Inactive</ion-badge>
+            </div>
+          </ion-label>
+
+          <ion-button *ngIf="!isReordering()" slot="end" fill="clear" (click)="openEditCategoryDialog(category)">
+            <ion-icon name="create-outline"></ion-icon>
+          </ion-button>
+          
+          <ion-button *ngIf="!isReordering()" slot="end" fill="clear" color="danger" (click)="deleteCategory(category)">
+            <ion-icon name="trash-outline"></ion-icon>
+          </ion-button>
+        </ion-item>
+      </ion-reorder-group>
+    </ion-list>
+
+    <!-- Info Card -->
+    <ion-card *ngIf="!isReordering() && filteredCategories().length > 0" class="info-card">
+      <ion-card-header>
+        <ion-card-title>
+          <ion-icon name="information-circle-outline"></ion-icon>
+          Tips
+        </ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ul>
+          <li>Categories help organize your products for easier management</li>
+          <li>Use the reorder button to change category order</li>
+          <li>Categories in use cannot be deleted</li>
+          <li>Choose colors and icons to make categories visually distinct</li>
+        </ul>
+      </ion-card-content>
+    </ion-card>
+  </div>
+
+  <!-- FAB Button -->
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed" *ngIf="!isReordering()">
+    <ion-fab-button (click)="openAddCategoryDialog()" color="primary">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

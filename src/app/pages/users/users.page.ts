@@ -46,6 +46,7 @@ import {
 
 import { User, Role, Terminal } from '../../models';
 import { UsersService } from '../../core/services/users.service';
+import { AuthService } from '../../core/services/auth.service';
 import { RolesService } from '../../core/services/roles.service';
 import { TerminalsService } from '../../core/services/terminals.service';
 
@@ -81,6 +82,7 @@ import { TerminalsService } from '../../core/services/terminals.service';
 })
 export class UsersPage implements OnInit {
   private usersService = inject(UsersService);
+  private authService = inject(AuthService);
   private rolesService = inject(RolesService);
   private terminalsService = inject(TerminalsService);
   private alertCtrl = inject(AlertController);
@@ -165,7 +167,7 @@ export class UsersPage implements OnInit {
     const filtered = this.users().filter(user =>
       user.firstName.toLowerCase().includes(term) ||
       user.lastName.toLowerCase().includes(term) ||
-      user.username.toLowerCase().includes(term) ||
+      (user.username?.toLowerCase().includes(term) || false) ||
       user.email.toLowerCase().includes(term)
     );
     this.filteredUsers.set(filtered);
@@ -310,7 +312,14 @@ export class UsersPage implements OnInit {
       // Hash the PIN before saving
       const hashedPin = userData.pin ? await this.hashPin(userData.pin) : undefined;
       
+      // Get current tenant ID from auth service
+      const tenantId = await this.authService.getTenantId();
+      if (!tenantId) {
+        throw new Error('No tenant context');
+      }
+
       await this.usersService.createUser({
+        tenantId,
         firstName: userData.firstName,
         lastName: userData.lastName,
         username: userData.username,

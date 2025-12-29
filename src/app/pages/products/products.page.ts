@@ -301,6 +301,9 @@ export class ProductsPage implements OnInit {
         }
       );
 
+      // Force reload products to ensure UI updates
+      await this.productsService.loadProducts();
+      
       await this.showToast('Product created successfully');
     } catch (error: any) {
       console.error('Error creating product:', error);
@@ -409,6 +412,9 @@ export class ProductsPage implements OnInit {
         description: data.description || ''
       });
 
+      // Force reload products to ensure UI updates
+      await this.productsService.loadProducts();
+      
       await this.showToast('Product updated successfully');
     } catch (error: any) {
       console.error('Error updating product:', error);
@@ -438,6 +444,10 @@ export class ProductsPage implements OnInit {
 
             try {
               await this.productsService.deleteProduct(product._id);
+              
+              // Force reload products to ensure UI updates
+              await this.productsService.loadProducts();
+              
               await this.showToast('Product deleted successfully');
             } catch (error: any) {
               console.error('Error deleting product:', error);
@@ -463,6 +473,10 @@ export class ProductsPage implements OnInit {
       await this.productsService.updateProduct(product._id, {
         active: !product.active
       });
+      
+      // Force reload products to ensure UI updates
+      await this.productsService.loadProducts();
+      
       await this.showToast(`Product ${product.active ? 'deactivated' : 'activated'}`);
     } catch (error: any) {
       console.error('Error updating product status:', error);

@@ -1,6 +1,9 @@
-import { Component, OnInit, signal, computed } from '@angular/core';
+import { Component, OnInit, signal, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ProductsService } from '../../core/services/products.service';
+import { Product, Category } from '../../models';
+import { ApiService } from '../../core/services/api.service';
 import {
   IonHeader,
   IonToolbar,
@@ -12,6 +15,7 @@ import {
   IonIcon,
   IonFab,
   IonFabButton,
+  IonFabList,
   IonSegment,
   IonSegmentButton,
   IonLabel,
@@ -53,24 +57,8 @@ import {
   trashOutline,
   createOutline,
   refreshOutline,
+  pricetagsOutline,
 } from 'ionicons/icons';
-
-interface Product {
-  id: string;
-  name: string;
-  sku?: string;
-  barcode?: string;
-  category?: string;
-  price: number;
-  cost?: number;
-  stockQuantity: number;
-  description?: string;
-  imageUrl?: string;
-  aiGeneratedDescription?: string;
-  aiGeneratedImage?: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
 
 @Component({
   selector: 'app-products-management',
@@ -90,6 +78,7 @@ interface Product {
     IonIcon,
     IonFab,
     IonFabButton,
+    IonFabList,
     IonSegment,
     IonSegmentButton,
     IonLabel,
@@ -120,20 +109,8 @@ export class ProductsManagementPage implements OnInit {
   isLoading = signal(false);
   selectedCategory = signal<string>('all');
   
-  categories = [
-    'All Categories',
-    'Food & Beverages',
-    'Electronics',
-    'Clothing & Apparel',
-    'Home & Kitchen',
-    'Beauty & Personal Care',
-    'Hardware & Tools',
-    'Office Supplies',
-    'Sports & Outdoors',
-    'Toys & Games',
-    'Health & Wellness',
-    'Other',
-  ];
+  categories = signal<string[]>(['All Categories']);
+  categoryObjects = signal<Category[]>([]);
 
   filteredProducts = computed(() => {
     let filtered = this.products();
@@ -143,7 +120,6 @@ export class ProductsManagementPage implements OnInit {
       filtered = filtered.filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
-          p.sku?.toLowerCase().includes(query) ||
           p.barcode?.toLowerCase().includes(query)
       );
     }
@@ -155,6 +131,8 @@ export class ProductsManagementPage implements OnInit {
 
     return filtered;
   });
+
+  private productsService = inject(ProductsService);
 
   constructor(
     private modalCtrl: ModalController,
@@ -176,46 +154,35 @@ export class ProductsManagementPage implements OnInit {
       trashOutline,
       createOutline,
       refreshOutline,
+      pricetagsOutline,
     });
   }
 
   async ngOnInit() {
+    await this.loadCategories();
     await this.loadProducts();
+  }
+
+  async loadCategories() {
+    try {
+      await this.productsService.loadCategories();
+      const dbCategories = this.productsService.categories();
+      this.categoryObjects.set(dbCategories);
+      const categoryNames = ['All Categories', ...dbCategories.map(c => c.name)];
+      this.categories.set(categoryNames);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      // Fallback to default if loading fails
+      this.categories.set(['All Categories', 'Other']);
+    }
   }
 
   async loadProducts() {
     this.isLoading.set(true);
     try {
-      // TODO: Replace with actual SQLite query
-      const mockProducts: Product[] = [
-        {
-          id: '1',
-          name: 'Coca Cola 500ml',
-          barcode: '5449000000996',
-          category: 'Food & Beverages',
-          price: 1.50,
-          cost: 0.80,
-          stockQuantity: 150,
-          description: 'Refreshing carbonated soft drink',
-          imageUrl: 'https://via.placeholder.com/200',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: '2',
-          name: 'Samsung Galaxy Phone',
-          sku: 'SAM-GAL-001',
-          category: 'Electronics',
-          price: 599.99,
-          cost: 450.00,
-          stockQuantity: 25,
-          description: 'Latest smartphone with advanced features',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-      
-      this.products.set(mockProducts);
+      await this.productsService.loadProducts();
+      const products = this.productsService.products();
+      this.products.set(products);
     } catch (error) {
       console.error('Error loading products:', error);
       await this.showToast('Failed to load products', 'danger');
@@ -379,15 +346,14 @@ export class ProductsManagementPage implements OnInit {
   }
 
   generateCSV(products: Product[]): string {
-    const headers = ['Name', 'SKU', 'Barcode', 'Category', 'Price', 'Cost', 'Stock', 'Description'];
+    const headers = ['Name', 'Barcode', 'Category', 'Price', 'Cost', 'Stock', 'Description'];
     const rows = products.map((p) => [
       p.name,
-      p.sku || '',
       p.barcode || '',
       p.category || '',
       p.price,
       p.cost || '',
-      p.stockQuantity,
+      p.quantity || 0,
       p.description || '',
     ]);
 
@@ -418,11 +384,14 @@ export class ProductsManagementPage implements OnInit {
           role: 'destructive',
           handler: async () => {
             try {
-              // TODO: Delete from SQLite
-              const updated = this.products().filter((p) => p.id !== product.id);
-              this.products.set(updated);
+              if (!product._id) {
+                throw new Error('Product ID is required for deletion');
+              }
+              await this.productsService.deleteProduct(product._id);
+              await this.loadProducts();
               await this.showToast('Product deleted', 'success');
             } catch (error) {
+              console.error('Error deleting product:', error);
               await this.showToast('Failed to delete product', 'danger');
             }
           },
@@ -435,29 +404,54 @@ export class ProductsManagementPage implements OnInit {
 
   async saveProduct(product: Product) {
     try {
-      // TODO: Save to SQLite and add to outbox
-      const newProduct = {
-        ...product,
-        id: crypto.randomUUID(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-      
-      this.products.update((products) => [...products, newProduct]);
+      await this.productsService.createProduct(
+        product.name,
+        product.barcode || '',
+        product.category || '',
+        product.price,
+        product.cost || 0,
+        product.quantity || 0,
+        product.imageUrl || '',
+        {
+          description: product.description,
+          measure: product.unit,
+          taxExempt: !product.taxable
+        }
+      );
+      await this.loadProducts();
       await this.showToast('Product added successfully', 'success');
     } catch (error) {
+      console.error('Error saving product:', error);
       await this.showToast('Failed to save product', 'danger');
     }
   }
 
   async updateProduct(product: Product) {
     try {
-      // TODO: Update in SQLite
-      this.products.update((products) =>
-        products.map((p) => (p.id === product.id ? { ...product, updatedAt: new Date() } : p))
+      if (!product._id) {
+        throw new Error('Product ID is required for update');
+      }
+      
+      await this.productsService.updateProduct(
+        product._id,
+        {
+          name: product.name,
+          barcode: product.barcode,
+          category: product.category,
+          price: product.price,
+          description: product.description,
+          unit: product.unit,
+          taxable: product.taxable,
+          active: product.active,
+          imageUrl: product.imageUrl
+        },
+        product.quantity,
+        product.cost
       );
+      await this.loadProducts();
       await this.showToast('Product updated successfully', 'success');
     } catch (error) {
+      console.error('Error updating product:', error);
       await this.showToast('Failed to update product', 'danger');
     }
   }
@@ -479,6 +473,12 @@ export class ProductsManagementPage implements OnInit {
 
   toggleViewMode() {
     this.viewMode.update((mode) => (mode === 'grid' ? 'list' : 'grid'));
+  }
+
+  handleImageError(event: Event) {
+    const img = event.target as HTMLImageElement;
+    // Set a simple SVG data URI as fallback
+    img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMzAwIiBoZWlnaHQ9IjMwMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
   }
 }
 
@@ -641,6 +641,8 @@ export class ProductEditModalComponent {
     category: false,
   });
 
+  private apiService = inject(ApiService);
+
   constructor(
     private modalCtrl: ModalController,
     private toastCtrl: ToastController
@@ -663,19 +665,17 @@ export class ProductEditModalComponent {
 
     this.aiLoading.update((state) => ({ ...state, description: true }));
     try {
-      // TODO: Call backend API
-      // const response = await this.http.post('/api/products/ai/generate-description', {
-      //   productName: this.formData.name,
-      //   category: this.formData.category
-      // }).toPromise();
+      const description = await this.apiService.generateProductDescription(
+        this.formData.name,
+        this.formData.category
+      );
       
-      // Mock AI response
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      this.formData.description = `${this.formData.name} is a premium product designed for African markets. Features high quality construction and competitive pricing. Ideal for retail and wholesale distribution.`;
-      
-      await this.showToast('Description generated successfully', 'success');
-    } catch (error) {
-      await this.showToast('Failed to generate description', 'danger');
+      this.formData.description = description;
+      await this.showToast('Description generated successfully!', 'success');
+    } catch (error: any) {
+      console.error('Failed to generate description:', error);
+      const message = error.message || 'Failed to generate description. Please check your API configuration.';
+      await this.showToast(message, 'danger');
     } finally {
       this.aiLoading.update((state) => ({ ...state, description: false }));
     }
@@ -686,19 +686,17 @@ export class ProductEditModalComponent {
 
     this.aiLoading.update((state) => ({ ...state, image: true }));
     try {
-      // TODO: Call backend API
-      // const response = await this.http.post('/api/products/ai/generate-image', {
-      //   productName: this.formData.name,
-      //   description: this.formData.description
-      // }).toPromise();
+      const imageUrl = await this.apiService.generateProductImage(
+        this.formData.name,
+        this.formData.description
+      );
       
-      // Mock AI response
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      this.formData.imageUrl = 'https://via.placeholder.com/400?text=' + encodeURIComponent(this.formData.name);
-      
-      await this.showToast('Image generated successfully', 'success');
-    } catch (error) {
-      await this.showToast('Failed to generate image', 'danger');
+      this.formData.imageUrl = imageUrl;
+      await this.showToast('Image generated successfully!', 'success');
+    } catch (error: any) {
+      console.error('Failed to generate image:', error);
+      const message = error.message || 'Failed to generate image. Please check your API configuration.';
+      await this.showToast(message, 'danger');
     } finally {
       this.aiLoading.update((state) => ({ ...state, image: false }));
     }
@@ -709,13 +707,17 @@ export class ProductEditModalComponent {
 
     this.aiLoading.update((state) => ({ ...state, category: true }));
     try {
-      // TODO: Call backend API
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      this.formData.category = 'Food & Beverages'; // Mock
+      const category = await this.apiService.suggestProductCategory(
+        this.formData.name,
+        this.formData.description
+      );
       
-      await this.showToast('Category suggested', 'success');
-    } catch (error) {
-      await this.showToast('Failed to suggest category', 'danger');
+      this.formData.category = category;
+      await this.showToast('Category suggested successfully!', 'success');
+    } catch (error: any) {
+      console.error('Failed to suggest category:', error);
+      const message = error.message || 'Failed to suggest category. Please check your API configuration.';
+      await this.showToast(message, 'danger');
     } finally {
       this.aiLoading.update((state) => ({ ...state, category: false }));
     }

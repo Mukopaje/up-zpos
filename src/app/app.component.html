@@ -24,8 +24,7 @@
             }
             <ion-menu-toggle auto-hide="false" *ngFor="let item of section.items">
               <ion-item 
-                routerDirection="root" 
-                [routerLink]="[item.url]" 
+                (click)="navigateTo(item.url)"
                 lines="none" 
                 detail="false" 
                 routerLinkActive="selected"

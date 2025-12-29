@@ -1,12 +1,12 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Terminal } from '../../models';
-import { DbService } from './db.service';
+import { SqliteService, TerminalRow } from './sqlite.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class TerminalsService {
-  private db = inject(DbService);
+  private sqlite = inject(SqliteService);
   
   terminals = signal<Terminal[]>([]);
   currentTerminal = signal<Terminal | null>(null);
@@ -15,10 +15,8 @@ export class TerminalsService {
   async loadTerminals(): Promise<void> {
     this.loading.set(true);
     try {
-      const terminals = await this.db.find<Terminal>({
-        type: 'terminal'
-      });
-      
+      const rows = await this.sqlite.getTerminals();
+      const terminals = rows.map(r => this.mapRowToTerminal(r));
       this.terminals.set(terminals);
     } catch (error) {
       console.error('Error loading terminals:', error);
@@ -30,8 +28,8 @@ export class TerminalsService {
 
   async getTerminal(id: string): Promise<Terminal | undefined> {
     try {
-      const doc = await this.db.get<Terminal>(id);
-      return doc && doc.type === 'terminal' ? doc : undefined;
+      const row = await this.sqlite.getTerminalById(id);
+      return row ? this.mapRowToTerminal(row) : undefined;
     } catch (error) {
       console.error('Error getting terminal:', error);
       return undefined;
@@ -52,7 +50,7 @@ export class TerminalsService {
     };
     
     try {
-      await this.db.put(newTerminal);
+      await this.sqlite.addTerminal(this.mapTerminalToRow(newTerminal));
       await this.loadTerminals();
       return newTerminal;
     } catch (error) {
@@ -63,16 +61,12 @@ export class TerminalsService {
 
   async updateTerminal(terminal: Terminal): Promise<void> {
     try {
-      const existing: any = await this.db.get(terminal._id);
-      if (!existing) throw new Error('Terminal not found');
-      
-      const updated = {
+      const updated: Terminal = {
         ...terminal,
-        _rev: existing._rev,
         updatedAt: Date.now()
       };
-      
-      await this.db.put(updated);
+
+      await this.sqlite.updateTerminal(updated._id, this.mapTerminalToRow(updated));
       await this.loadTerminals();
     } catch (error) {
       console.error('Error updating terminal:', error);
@@ -82,10 +76,7 @@ export class TerminalsService {
 
   async deleteTerminal(id: string): Promise<void> {
     try {
-      const doc = await this.db.get(id);
-      if (!doc) throw new Error('Terminal not found');
-      
-      await this.db.delete(doc as any);
+      await this.sqlite.deleteTerminal(id);
       await this.loadTerminals();
     } catch (error) {
       console.error('Error deleting terminal:', error);
@@ -158,5 +149,74 @@ export class TerminalsService {
       return terminal.hospitalityConfig.printers.receipt;
     }
     return terminal.printerAddress;
+  }
+
+  private mapRowToTerminal(row: TerminalRow): Terminal {
+    const hospitalityConfig = row.hospitality_config
+      ? JSON.parse(row.hospitality_config)
+      : undefined;
+
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    const terminal: Terminal = {
+      _id: row.id!,
+      type: 'terminal',
+      name: row.name,
+      code: row.code,
+      terminalType: row.terminal_type as any,
+      location: row.location,
+      posMode: row.pos_mode as any,
+      hospitalityConfig,
+      printerAddress: row.printer_address,
+      active: row.active === undefined ? true : row.active === 1,
+      online: row.online === 1,
+      lastPing: row.last_ping ? Date.parse(row.last_ping) : undefined,
+      createdAt,
+      updatedAt,
+      createdBy: 'system'
+    };
+
+    // If extra metadata was stored inside hospitalityConfig.meta, surface it
+    if (hospitalityConfig && hospitalityConfig.meta) {
+      terminal.ipAddress = hospitalityConfig.meta.ipAddress;
+      terminal.macAddress = hospitalityConfig.meta.macAddress;
+      terminal.deviceInfo = hospitalityConfig.meta.deviceInfo;
+      terminal.createdBy = hospitalityConfig.meta.createdBy ?? terminal.createdBy;
+    }
+
+    return terminal;
+  }
+
+  private mapTerminalToRow(terminal: Terminal): TerminalRow {
+    // Preserve existing hospitalityConfig and also tuck away extra metadata
+    const hospitalityConfig: any = terminal.hospitalityConfig
+      ? { ...terminal.hospitalityConfig }
+      : undefined;
+
+    if (hospitalityConfig) {
+      hospitalityConfig.meta = {
+        ipAddress: terminal.ipAddress,
+        macAddress: terminal.macAddress,
+        deviceInfo: terminal.deviceInfo,
+        createdBy: terminal.createdBy,
+      };
+    }
+
+    return {
+      id: terminal._id,
+      name: terminal.name,
+      code: terminal.code,
+      terminal_type: terminal.terminalType,
+      location: terminal.location,
+      pos_mode: terminal.posMode,
+      hospitality_config: hospitalityConfig ? JSON.stringify(hospitalityConfig) : null as any,
+      printer_address: terminal.printerAddress,
+      active: terminal.active === false ? 0 : 1,
+      online: terminal.online ? 1 : 0,
+      last_ping: terminal.lastPing ? new Date(terminal.lastPing).toISOString() : null as any,
+      created_at: new Date(terminal.createdAt).toISOString(),
+      updated_at: new Date(terminal.updatedAt).toISOString()
+    };
   }
 }

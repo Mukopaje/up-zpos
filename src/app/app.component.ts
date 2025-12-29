@@ -42,7 +42,8 @@ import {
   desktopOutline,
   bagHandleOutline,
   chevronBackOutline,
-  chevronForwardOutline
+  chevronForwardOutline,
+  listOutline
 } from 'ionicons/icons';
 import { filter } from 'rxjs/operators';
 
@@ -90,8 +91,8 @@ export class AppComponent implements OnInit {
   menuCollapsed = signal(false);
   currentRoute = signal('');
   
-  // Auto-hide menu in POS routes
-  private posRoutes = ['/pos', '/pos-retail', '/pos-category', '/pos-hospitality'];
+  // Auto-hide menu in POS routes (and checkout)
+  private posRoutes = ['/pos', '/pos-retail', '/pos-category', '/pos-hospitality', '/checkout'];
 
   // Computed - Filter menu by permissions
   public menuSections = computed(() => {
@@ -108,7 +109,8 @@ export class AppComponent implements OnInit {
         title: 'Inventory',
         permission: 'products',
         items: [
-          { title: 'Products', url: '/products', icon: 'cube-outline', permission: 'products' },
+          { title: 'Products', url: '/products-management', icon: 'cube-outline', permission: 'products' },
+          { title: 'Categories', url: '/categories', icon: 'layers-outline', permission: 'products' },
           { title: 'Modifier Groups', url: '/modifier-groups', icon: 'layers-outline', permission: 'products' },
           { title: 'Inventory', url: '/inventory', icon: 'layers-outline', permission: 'inventory' },
         ]
@@ -208,7 +210,8 @@ export class AppComponent implements OnInit {
       'desktop-outline': desktopOutline,
       'barcode-outline': bagHandleOutline,
       'chevron-back-outline': chevronBackOutline,
-      'chevron-forward-outline': chevronForwardOutline
+      'chevron-forward-outline': chevronForwardOutline,
+      'list-outline': listOutline
     });
   }
 
@@ -264,6 +267,15 @@ export class AppComponent implements OnInit {
   }
 
   toggleMenu() {
+    const url = this.router.url;
+
+    // Keep menu closed on checkout page
+    if (url.startsWith('/checkout')) {
+      this.menuCollapsed.set(true);
+      this.menuCtrl.close();
+      return;
+    }
+
     this.menuCollapsed.update(val => !val);
   }
 
@@ -292,5 +304,14 @@ export class AppComponent implements OnInit {
       ]
     });
     await alert.present();
+  }
+
+  navigateTo(url: string) {
+    console.log('Navigating to:', url);
+    this.router.navigate([url]).then(success => {
+      console.log('Navigation success:', success);
+    }).catch(error => {
+      console.error('Navigation error:', error);
+    });
   }
 }

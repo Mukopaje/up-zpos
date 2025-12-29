@@ -405,7 +405,7 @@
          [class.mobile-hidden]="isMobile() && (currentView() !== 'products' || selectedCategory())"
          [class.checkout-hidden]="currentView() === 'checkout'">
       <div class="categories-container">
-        <div class="categories-grid" [class.two-columns]="categoryColumns() === 2">
+        <div class="categories-grid">
           <!-- Category Tiles -->
           <div
             *ngFor="let category of paginatedCategories()"

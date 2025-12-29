@@ -5,6 +5,10 @@
       <ion-button (click)="toggleViewMode()">
         <ion-icon [name]="viewMode() === 'grid' ? 'list-outline' : 'grid-outline'"></ion-icon>
       </ion-button>
+      <ion-button routerLink="/categories" title="Manage Categories">
+        <ion-icon name="pricetags-outline"></ion-icon>
+        <ion-label>Categories</ion-label>
+      </ion-button>
       <ion-button (click)="showBulkActions()">
         <ion-icon name="cloud-upload-outline"></ion-icon>
       </ion-button>
@@ -24,7 +28,7 @@
       <ion-segment-button value="all">
         <ion-label>All</ion-label>
       </ion-segment-button>
-      <ion-segment-button *ngFor="let cat of categories.slice(1)" [value]="cat">
+      <ion-segment-button *ngFor="let cat of categories().slice(1)" [value]="cat">
         <ion-label>{{ cat }}</ion-label>
       </ion-segment-button>
     </ion-segment>
@@ -62,14 +66,12 @@
             [src]="product.imageUrl || 'https://via.placeholder.com/300?text=' + product.name"
             [alt]="product.name"
             class="product-image"
+            (error)="handleImageError($event)"
           />
           <ion-card-header>
             <ion-card-title>{{ product.name }}</ion-card-title>
             <div class="product-meta">
               <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
-              <ion-badge *ngIf="product.aiGeneratedDescription" color="secondary">
-                <ion-icon name="sparkles-outline" size="small"></ion-icon>
-              </ion-badge>
             </div>
           </ion-card-header>
           <ion-card-content>
@@ -84,8 +86,8 @@
               </div>
               <div class="info-row">
                 <span class="label">Stock:</span>
-                <span class="value" [class.low-stock]="product.stockQuantity < 10">
-                  {{ product.stockQuantity }} units
+                <span class="value" [class.low-stock]="(product.quantity || 0) < 10">
+                  {{ product.quantity || 0 }} units
                 </span>
               </div>
               <div class="info-row" *ngIf="product.barcode">
@@ -117,16 +119,17 @@
         [alt]="product.name"
         class="list-thumbnail"
         slot="start"
+        (error)="handleImageError($event)"
       />
       <ion-label>
         <h2>{{ product.name }}</h2>
         <p *ngIf="product.barcode">Barcode: {{ product.barcode }}</p>
-        <p *ngIf="product.sku">SKU: {{ product.sku }}</p>
+
         <div class="list-meta">
           <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
           <span class="price">K{{ product.price.toFixed(2) }}</span>
-          <span class="stock" [class.low-stock]="product.stockQuantity < 10">
-            {{ product.stockQuantity }} in stock
+          <span class="stock" [class.low-stock]="(product.quantity || 0) < 10">
+            {{ product.quantity || 0 }} in stock
           </span>
         </div>
       </ion-label>
@@ -148,7 +151,7 @@
       <ion-fab-button color="secondary" (click)="openAddProductModal()">
         <ion-icon name="add"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button color="tertiary" (click)="scanBarcode()">
+      <ion-fab-button color="primary" (click)="scanBarcode()">
         <ion-icon name="barcode-outline"></ion-icon>
       </ion-fab-button>
     </ion-fab-list>

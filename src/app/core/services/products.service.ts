@@ -1,7 +1,7 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-import { DbService } from './db.service';
+import { BehaviorSubject } from 'rxjs';
 import { StorageService } from './storage.service';
+import { SqliteService, Product as SqlProduct, Category as SqlCategory } from './sqlite.service';
 import { Product, Category, ItemInv } from '../../models';
 
 interface Department {
@@ -16,7 +16,7 @@ interface Department {
   providedIn: 'root'
 })
 export class ProductsService {
-  private db = inject(DbService);
+  private sqlite = inject(SqliteService);
   private storage = inject(StorageService);
 
   // Reactive state with signals
@@ -54,9 +54,73 @@ export class ProductsService {
   }
 
   private async loadInitialData() {
+    await this.sqlite.ensureInitialized();
     await this.loadProducts();
     await this.loadCategories();
     await this.loadDepartments();
+  }
+
+  /**
+   * Map SQLite product row to app Product model
+   */
+  private mapSqlProductToApp(row: SqlProduct): Product {
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    const quantity = row.stock_quantity ?? 0;
+    const cost = row.cost ?? 0;
+
+    const inventory: ItemInv[] = [{
+      location: this.locationId,
+      warehouse: this.warehouseId,
+      qty: quantity,
+      cost
+    }];
+
+    return {
+      _id: row.id || '',
+      type: 'product',
+      name: row.name,
+      barcode: row.barcode || '',
+      category: row.category || '',
+      price: row.price,
+      cost,
+      quantity,
+      unit: 'unit',
+      description: row.description || '',
+      imageUrl: row.image_url || '',
+      taxable: true,
+      active: true,
+      inventory,
+      tags: [],
+      favorite: false,
+      createdAt,
+      updatedAt,
+      createdBy: 'system',
+      updatedBy: 'system'
+    };
+  }
+
+  /**
+   * Map SQLite category row to app Category model
+   */
+  private mapSqlCategoryToApp(row: SqlCategory): Category {
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    return {
+      _id: row.id || '',
+      type: 'category',
+      name: row.name,
+      description: row.description || '',
+      icon: row.icon || '',
+      color: row.color || '',
+      imageUrl: row.image_url || '',
+      order: row.sort_order ?? 0,
+      active: row.active !== 0,
+      createdAt,
+      updatedAt
+    };
   }
 
   /**
@@ -65,14 +129,11 @@ export class ProductsService {
   async loadProducts(): Promise<Product[]> {
     this.isLoading.set(true);
     try {
-      const result = await this.db.find<Product>({
-        type: 'product'
-      });
-
-      const processedProducts = await this.processProducts(result);
-      this.products.set(processedProducts);
-      
-      return processedProducts;
+      await this.sqlite.ensureInitialized();
+      const rows = await this.sqlite.getProducts();
+      const mapped = rows.map(row => this.mapSqlProductToApp(row));
+      this.products.set(mapped);
+      return mapped;
     } catch (error) {
       console.error('Error loading products:', error);
       return [];
@@ -131,22 +192,10 @@ export class ProductsService {
    */
   async getProduct(id: string): Promise<Product | null> {
     try {
-      const doc = await this.db.get<Product>(id);
-      
-      if (!doc) return null;
-
-      const dataURIPrefix = 'data:image/jpeg;base64,';
-      let imageData = '';
-      
-      if (doc._attachments?.['product.jpg']?.data) {
-        imageData = dataURIPrefix + doc._attachments['product.jpg'].data;
-      }
-
-      return {
-        ...doc,
-        inventory: this.processInventory(doc.inventory || []),
-        imageUrl: imageData
-      };
+      await this.sqlite.ensureInitialized();
+      const row = await this.sqlite.getProductById(id);
+      if (!row) return null;
+      return this.mapSqlProductToApp(row);
     } catch (error) {
       console.error('Error getting product:', error);
       return null;
@@ -165,13 +214,10 @@ export class ProductsService {
         return product;
       }
 
-      // Fallback to database search
-      const result = await this.db.find<Product>({
-        type: 'product',
-        barcode: barcode
-      });
-
-      return result.length > 0 ? result[0] : null;
+      // Fallback to SQLite search
+      await this.sqlite.ensureInitialized();
+      const row = await this.sqlite.getProductByBarcode(barcode);
+      return row ? this.mapSqlProductToApp(row) : null;
     } catch (error) {
       console.error('Error finding product by barcode:', error);
       return null;
@@ -197,47 +243,24 @@ export class ProductsService {
     } = {}
   ): Promise<Product | null> {
     try {
-      const timestamp = new Date().toISOString();
-      const base64String = imageBase64 ? imageBase64.substring(23) : '';
+      await this.sqlite.ensureInitialized();
 
-      const product: Product = {
-        _id: 'PRD_' + timestamp,
-        type: 'product',
+      const sqlProduct: SqlProduct = {
         name,
         barcode,
         category,
         price,
-        description: options.description || '',
-        unit: options.measure || 'unit',
-        taxable: !options.taxExempt,
-        active: true,
-        quantity: qty, // Kept for compatibility
         cost,
-        inventory: [{
-          location: this.locationId,
-          warehouse: this.warehouseId,
-          qty,
-          cost
-        }],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        createdBy: await this.storage.get('user-id') || 'system',
-        updatedBy: await this.storage.get('user-id') || 'system',
-        imageUrl: '',
-        _attachments: base64String ? {
-          'product.jpg': {
-            content_type: 'image/jpeg',
-            data: base64String
-          }
-        } : undefined
+        stock_quantity: qty,
+        description: options.description || '',
+        image_url: imageBase64 || ''
       };
 
-      const savedProduct = await this.db.put(product);
-      
-      // Reload products
+      const id = await this.sqlite.addProduct(sqlProduct);
       await this.loadProducts();
-      
-      return savedProduct;
+
+      const row = await this.sqlite.getProductById(id);
+      return row ? this.mapSqlProductToApp(row) : null;
     } catch (error) {
       console.error('Error creating product:', error);
       return null;
@@ -254,61 +277,27 @@ export class ProductsService {
     cost?: number
   ): Promise<Product | null> {
     try {
-      const existing = await this.db.get<Product>(id);
-      
-      if (!existing) {
-        throw new Error('Product not found');
-      }
+      await this.sqlite.ensureInitialized();
 
-      // Update inventory if provided
-      if (qty !== undefined || cost !== undefined) {
-        const inventory = existing.inventory || [];
-        const currentInvIndex = inventory.findIndex(
-          inv => inv.location === this.locationId && inv.warehouse === this.warehouseId
-        );
-
-        if (currentInvIndex >= 0) {
-          inventory[currentInvIndex] = {
-            ...inventory[currentInvIndex],
-            qty: qty !== undefined ? qty : inventory[currentInvIndex].qty,
-            cost: cost !== undefined ? cost : inventory[currentInvIndex].cost
-          };
-        } else {
-          inventory.push({
-            location: this.locationId,
-            warehouse: this.warehouseId,
-            qty: qty || 0,
-            cost: cost || 0
-          });
-        }
-
-        updates.inventory = inventory;
-      }
-
-      // Handle image update
-      if (updates.imageUrl && updates.imageUrl.includes('base64')) {
-        const base64String = updates.imageUrl.substring(23);
-        updates._attachments = {
-          'product.jpg': {
-            content_type: 'image/jpeg',
-            data: base64String
-          }
-        };
-      }
-
-      const updatedProduct: Product = {
-        ...existing,
-        ...updates,
-        updatedAt: Date.now(),
-        updatedBy: await this.storage.get('user-id') || 'system'
+      const sqlUpdates: Partial<SqlProduct> = {
+        name: updates.name,
+        barcode: updates.barcode,
+        category: updates.category,
+        price: updates.price,
+        cost: updates.cost,
+        description: updates.description,
+        image_url: updates.imageUrl
       };
 
-      const saved = await this.db.put(updatedProduct);
-      
-      // Reload products
+      if (qty !== undefined) {
+        sqlUpdates.stock_quantity = qty;
+      }
+
+      await this.sqlite.updateProduct(id, sqlUpdates);
       await this.loadProducts();
-      
-      return saved;
+
+      const row = await this.sqlite.getProductById(id);
+      return row ? this.mapSqlProductToApp(row) : null;
     } catch (error) {
       console.error('Error updating product:', error);
       return null;
@@ -320,15 +309,9 @@ export class ProductsService {
    */
   async deleteProduct(id: string): Promise<boolean> {
     try {
-      const product = await this.db.get<Product>(id);
-      
-      if (!product || !product._rev) return false;
-
-      await this.db.delete(product as any);
-      
-      // Reload products
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.deleteProduct(id);
       await this.loadProducts();
-      
       return true;
     } catch (error) {
       console.error('Error deleting product:', error);
@@ -341,27 +324,11 @@ export class ProductsService {
    */
   async loadCategories(): Promise<Category[]> {
     try {
-      const result = await this.db.find<Category>({
-        type: 'category'
-      });
-
-      const processedCategories = result.map(cat => {
-        const dataURIPrefix = 'data:image/jpeg;base64,';
-        let imageData = '';
-        
-        if (cat._attachments?.['category.jpg']?.data) {
-          imageData = dataURIPrefix + cat._attachments['category.jpg'].data;
-        }
-
-        return {
-          ...cat,
-          icon: imageData,
-          active: cat.active !== false
-        };
-      });
-
-      this.categories.set(processedCategories);
-      return processedCategories;
+      await this.sqlite.ensureInitialized();
+      const rows = await this.sqlite.getCategories();
+      const mapped = rows.map(row => this.mapSqlCategoryToApp(row));
+      this.categories.set(mapped);
+      return mapped;
     } catch (error) {
       console.error('Error loading categories:', error);
       return [];
@@ -373,29 +340,10 @@ export class ProductsService {
    */
   async getCategory(id: string): Promise<Category | null> {
     try {
-      const doc = await this.db.get<any>(id);
-      
-      if (!doc) return null;
-
-      const dataURIPrefix = 'data:image/jpeg;base64,';
-      let imageData = '';
-      
-      if (doc._attachments?.['category.jpg']?.data) {
-        imageData = dataURIPrefix + doc._attachments['category.jpg'].data;
-      }
-
-      return {
-        _id: doc._id,
-        _rev: doc._rev,
-        type: 'category',
-        name: doc.name,
-        description: doc.description || '',
-        icon: imageData,
-        order: doc.order || 0,
-        active: doc.active !== false,
-        createdAt: doc.createdAt || Date.now(),
-        updatedAt: doc.updatedAt || Date.now()
-      };
+      await this.sqlite.ensureInitialized();
+      const row = await this.sqlite.getCategoryById(id);
+      if (!row) return null;
+      return this.mapSqlCategoryToApp(row);
     } catch (error) {
       console.error('Error getting category:', error);
       return null;
@@ -411,33 +359,23 @@ export class ProductsService {
     imageBase64: string = ''
   ): Promise<Category | null> {
     try {
-      const timestamp = new Date().toISOString();
-      const base64String = imageBase64 ? imageBase64.substring(23) : '';
+      await this.sqlite.ensureInitialized();
 
-      const category: Category = {
-        _id: 'CAT_' + timestamp,
-        type: 'category',
+      const sqlCategory: SqlCategory = {
         name,
         description,
-        icon: '',
-        order: this.categories().length,
-        active: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        _attachments: base64String ? {
-          'category.jpg': {
-            content_type: 'image/jpeg',
-            data: base64String
-          }
-        } : undefined
+        color: undefined,
+        icon: undefined,
+        image_url: imageBase64 || ''
       };
 
-      const saved = await this.db.put(category);
-      
-      this._categorySubject.next(saved);
+      const id = await this.sqlite.addCategory(sqlCategory);
       await this.loadCategories();
-      
-      return saved;
+
+      const row = await this.sqlite.getCategoryById(id);
+      const mapped = row ? this.mapSqlCategoryToApp(row) : null;
+      this._categorySubject.next(mapped);
+      return mapped;
     } catch (error) {
       console.error('Error creating category:', error);
       return null;
@@ -454,31 +392,21 @@ export class ProductsService {
     imageBase64: string = ''
   ): Promise<Category | null> {
     try {
-      const existing = await this.db.get<any>(id);
-      
-      if (!existing) return null;
+      await this.sqlite.ensureInitialized();
 
-      const base64String = imageBase64 ? imageBase64.substring(23) : '';
-
-      const updated: any = {
-        ...existing,
+      const sqlUpdates: Partial<SqlCategory> = {
         name,
         description,
-        updatedAt: Date.now(),
-        _attachments: base64String ? {
-          'category.jpg': {
-            content_type: 'image/jpeg',
-            data: base64String
-          }
-        } : existing._attachments
+        image_url: imageBase64 || undefined
       };
 
-      const saved = await this.db.put(updated);
-      
-      this._categorySubject.next(saved);
+      await this.sqlite.updateCategory(id, sqlUpdates);
       await this.loadCategories();
-      
-      return saved;
+
+      const row = await this.sqlite.getCategoryById(id);
+      const mapped = row ? this.mapSqlCategoryToApp(row) : null;
+      this._categorySubject.next(mapped);
+      return mapped;
     } catch (error) {
       console.error('Error updating category:', error);
       return null;
@@ -486,20 +414,77 @@ export class ProductsService {
   }
 
   /**
+   * Delete category
+   */
+  async deleteCategory(id: string): Promise<boolean> {
+    try {
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.deleteCategory(id);
+      await this.loadCategories();
+      return true;
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get subcategories of a category
+   */
+  getSubcategories(parentId: string): Category[] {
+    return this.categories().filter(c => c.parentId === parentId);
+  }
+
+  /**
+   * Get root categories (no parent)
+   */
+  getRootCategories(): Category[] {
+    return this.categories().filter(c => !c.parentId);
+  }
+
+  /**
+   * Get category hierarchy (parent and all ancestors)
+   */
+  getCategoryHierarchy(categoryId: string): Category[] {
+    const hierarchy: Category[] = [];
+    let currentId: string | undefined = categoryId;
+
+    while (currentId) {
+      const category = this.categories().find(c => c._id === currentId);
+      if (category) {
+        hierarchy.unshift(category);
+        currentId = category.parentId;
+      } else {
+        break;
+      }
+    }
+
+    return hierarchy;
+  }
+
+  /**
+   * Update product categories (many-to-many)
+   */
+  async updateProductCategories(productId: string, categoryIds: string[]): Promise<boolean> {
+    try {
+      await this.sqlite.ensureInitialized();
+      const primaryCategory = categoryIds[0] || '';
+      await this.sqlite.updateProduct(productId, { category: primaryCategory });
+      await this.loadProducts();
+      return true;
+    } catch (error) {
+      console.error('Error updating product categories:', error);
+      return false;
+    }
+  }
+
+  /**
    * Load departments
    */
   async loadDepartments(): Promise<Department[]> {
-    try {
-      const result = await this.db.find<Department>({
-        type: 'department'
-      });
-
-      this.departments.set(result);
-      return result;
-    } catch (error) {
-      console.error('Error loading departments:', error);
-      return [];
-    }
+    // Departments were previously stored in PouchDB; not yet migrated.
+    this.departments.set([]);
+    return [];
   }
 
   /**
@@ -519,14 +504,37 @@ export class ProductsService {
   }
 
   /**
-   * Filter products by category
+   * Filter products by category (supports multiple categories)
    */
   filterByCategory(categoryId: string): Product[] {
     if (!categoryId || categoryId === 'all') {
       return this.products();
     }
 
-    return this.products().filter(p => p.category === categoryId);
+    return this.products().filter(p => {
+      // Support both old single category and new multiple categories
+      if (p.categories && p.categories.length > 0) {
+        return p.categories.includes(categoryId);
+      }
+      return p.category === categoryId;
+    });
+  }
+
+  /**
+   * Filter products by multiple categories
+   */
+  filterByCategories(categoryIds: string[]): Product[] {
+    if (!categoryIds || categoryIds.length === 0) {
+      return this.products();
+    }
+
+    return this.products().filter(p => {
+      // Support both old single category and new multiple categories
+      if (p.categories && p.categories.length > 0) {
+        return p.categories.some(catId => categoryIds.includes(catId));
+      }
+      return categoryIds.includes(p.category);
+    });
   }
 
   /**
@@ -558,16 +566,9 @@ export class ProductsService {
    */
   async updatePrice(id: string, price: number): Promise<boolean> {
     try {
-      const product = await this.db.get<Product>(id);
-      
-      if (!product) return false;
-
-      product.price = price;
-      product.updatedAt = Date.now();
-      
-      await this.db.put(product);
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.updateProduct(id, { price });
       await this.loadProducts();
-      
       return true;
     } catch (error) {
       console.error('Error updating price:', error);
@@ -580,32 +581,9 @@ export class ProductsService {
    */
   async updateQuantity(id: string, quantity: number): Promise<boolean> {
     try {
-      const product = await this.db.get<Product>(id);
-      
-      if (!product) return false;
-
-      const inventory = product.inventory || [];
-      const invIndex = inventory.findIndex(
-        inv => inv.location === this.locationId && inv.warehouse === this.warehouseId
-      );
-
-      if (invIndex >= 0) {
-        inventory[invIndex].qty = quantity;
-      } else {
-        inventory.push({
-          location: this.locationId,
-          warehouse: this.warehouseId,
-          qty: quantity,
-          cost: product.cost || 0
-        });
-      }
-
-      product.inventory = inventory;
-      product.updatedAt = Date.now();
-      
-      await this.db.put(product);
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.updateProduct(id, { stock_quantity: quantity });
       await this.loadProducts();
-      
       return true;
     } catch (error) {
       console.error('Error updating quantity:', error);
@@ -618,27 +596,14 @@ export class ProductsService {
    */
   async reduceQuantity(id: string, amount: number): Promise<boolean> {
     try {
-      const product = await this.db.get<Product>(id);
-      
-      if (!product) return false;
-
-      const inventory = product.inventory || [];
-      const invIndex = inventory.findIndex(
-        inv => inv.location === this.locationId && inv.warehouse === this.warehouseId
-      );
-
-      if (invIndex >= 0) {
-        inventory[invIndex].qty = Math.max(0, inventory[invIndex].qty - amount);
-        product.inventory = inventory;
-        product.updatedAt = Date.now();
-        
-        await this.db.put(product);
-        await this.loadProducts();
-        
-        return true;
-      }
-
-      return false;
+      await this.sqlite.ensureInitialized();
+      const row = await this.sqlite.getProductById(id);
+      if (!row) return false;
+      const currentQty = row.stock_quantity ?? 0;
+      const newQty = Math.max(0, currentQty - amount);
+      await this.sqlite.updateProduct(id, { stock_quantity: newQty });
+      await this.loadProducts();
+      return true;
     } catch (error) {
       console.error('Error reducing quantity:', error);
       return false;

@@ -1,0 +1,196 @@
+<ion-header [translucent]="true">
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/login"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Register Your Business</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="ion-padding">
+  <div class="register-container">
+    <ion-card class="register-card">
+      <ion-card-header>
+        <ion-card-title>Create Account</ion-card-title>
+        <div class="step-indicator">
+          <span [class.active]="currentStep() >= 1">1</span>
+          <span class="line" [class.active]="currentStep() >= 2"></span>
+          <span [class.active]="currentStep() >= 2">2</span>
+          <span class="line" [class.active]="currentStep() >= 3"></span>
+          <span [class.active]="currentStep() >= 3">3</span>
+        </div>
+      </ion-card-header>
+
+      <ion-card-content>
+        <!-- Step 1: Business Information -->
+        <div *ngIf="currentStep() === 1">
+          <div class="step-title">
+            <ion-text color="primary">
+              <h3>Business Information</h3>
+            </ion-text>
+            <p>Tell us about your business</p>
+          </div>
+
+          <ion-item lines="none">
+            <ion-input
+              label="Business Name"
+              labelPlacement="floating"
+              type="text"
+              [(ngModel)]="businessName"
+              required
+            ></ion-input>
+          </ion-item>
+
+          <ion-item lines="none">
+            <ion-input
+              label="Email Address"
+              labelPlacement="floating"
+              type="email"
+              [(ngModel)]="ownerEmail"
+              required
+            ></ion-input>
+          </ion-item>
+
+          <ion-item lines="none">
+            <ion-input
+              label="Phone Number (Optional)"
+              labelPlacement="floating"
+              type="tel"
+              [(ngModel)]="ownerPhone"
+            ></ion-input>
+          </ion-item>
+
+          <ion-button
+            expand="block"
+            color="primary"
+            class="ion-margin-top"
+            [disabled]="!canProceedStep1()"
+            (click)="nextStep()"
+          >
+            Continue
+          </ion-button>
+
+          <div class="login-link ion-margin-top ion-text-center">
+            <ion-text color="medium">
+              <p>Already have an account?</p>
+            </ion-text>
+            <ion-button fill="clear" routerLink="/login">
+              Login Here
+            </ion-button>
+          </div>
+        </div>
+
+        <!-- Step 2: Admin User -->
+        <div *ngIf="currentStep() === 2">
+          <div class="step-title">
+            <ion-text color="primary">
+              <h3>Admin User</h3>
+            </ion-text>
+            <p>Create your administrator account</p>
+          </div>
+
+          <ion-item lines="none">
+            <ion-input
+              label="First Name"
+              labelPlacement="floating"
+              type="text"
+              [(ngModel)]="adminFirstName"
+              required
+            ></ion-input>
+          </ion-item>
+
+          <ion-item lines="none">
+            <ion-input
+              label="Last Name"
+              labelPlacement="floating"
+              type="text"
+              [(ngModel)]="adminLastName"
+              required
+            ></ion-input>
+          </ion-item>
+
+          <div class="button-group ion-margin-top">
+            <ion-button
+              expand="block"
+              fill="outline"
+              color="medium"
+              (click)="prevStep()"
+            >
+              Back
+            </ion-button>
+            <ion-button
+              expand="block"
+              color="primary"
+              [disabled]="!canProceedStep2()"
+              (click)="nextStep()"
+            >
+              Continue
+            </ion-button>
+          </div>
+        </div>
+
+        <!-- Step 3: PIN Setup -->
+        <div *ngIf="currentStep() === 3">
+          <div class="step-title">
+            <ion-text color="primary">
+              <h3>Set Admin PIN</h3>
+            </ion-text>
+            <p>Create a secure 4-6 digit PIN</p>
+          </div>
+
+          <ion-item lines="none">
+            <ion-input
+              label="Admin PIN"
+              labelPlacement="floating"
+              type="password"
+              inputmode="numeric"
+              [(ngModel)]="adminPin"
+              required
+              maxlength="6"
+            ></ion-input>
+          </ion-item>
+
+          <ion-item lines="none">
+            <ion-input
+              label="Confirm PIN"
+              labelPlacement="floating"
+              type="password"
+              inputmode="numeric"
+              [(ngModel)]="confirmPin"
+              required
+              maxlength="6"
+            ></ion-input>
+          </ion-item>
+
+          <div class="help-text ion-margin-top">
+            <ion-text color="medium">
+              <small>
+                <strong>Important:</strong> This PIN will be used for quick login. 
+                You can change it later from Settings.
+              </small>
+            </ion-text>
+          </div>
+
+          <div class="button-group ion-margin-top">
+            <ion-button
+              expand="block"
+              fill="outline"
+              color="medium"
+              (click)="prevStep()"
+            >
+              Back
+            </ion-button>
+            <ion-button
+              expand="block"
+              color="primary"
+              [disabled]="!adminPin || !confirmPin || adminPin.length < 4"
+              (click)="onRegister()"
+            >
+              Create Account
+            </ion-button>
+          </div>
+        </div>
+      </ion-card-content>
+    </ion-card>
+  </div>
+</ion-content>

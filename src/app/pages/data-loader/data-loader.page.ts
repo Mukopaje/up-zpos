@@ -8,9 +8,9 @@ import {
   IonProgressBar
 } from '@ionic/angular/standalone';
 
-import { DbService } from '../../core/services/db.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { SeedDataService } from '../../core/services/seed-data.service';
+import { SqliteService } from '../../core/services/sqlite.service';
 
 @Component({
   selector: 'app-data-loader',
@@ -27,9 +27,9 @@ import { SeedDataService } from '../../core/services/seed-data.service';
 })
 export class DataLoaderPage implements OnInit {
   private router = inject(Router);
-  private dbService = inject(DbService);
   private settingsService = inject(SettingsService);
   private seedDataService = inject(SeedDataService);
+  private sqliteService = inject(SqliteService);
 
   loadingMessage = signal('Initializing...');
   progress = signal(0);
@@ -40,51 +40,69 @@ export class DataLoaderPage implements OnInit {
 
   private async initializeApp() {
     try {
-      // Step 1: Initialize database
-      this.loadingMessage.set('Initializing database...');
-      this.progress.set(0.2);
+      // Step 1: Initialize SQLite database
+      this.loadingMessage.set('Initializing SQLite...');
+      this.progress.set(0.1);
+      
+      try {
+        await this.sqliteService.initialize();
+        console.log('SQLite initialized successfully');
+      } catch (sqliteError) {
+        console.error('SQLite initialization error:', sqliteError);
+        // Continue anyway - app can still start without local SQLite
+      }
+      
+      await this.delay(300);
+
+      // Step 2: (Legacy PouchDB init removed) - advance progress
+      this.loadingMessage.set('Preparing local data...');
+      this.progress.set(0.3);
       await this.delay(500);
 
-      if (!this.dbService.isReady()) {
-        await this.dbService.initDB();
-      }
-
-      // Step 2: Seed sample data
+      // Step 3: Seed sample data
       this.loadingMessage.set('Loading sample products...');
-      this.progress.set(0.4);
+      this.progress.set(0.5);
       await this.seedDataService.seedSampleData();
       await this.delay(500);
 
-      // Step 3: Load settings
+      // Step 4: Load settings
       this.loadingMessage.set('Loading settings...');
-      this.progress.set(0.6);
+      this.progress.set(0.7);
       await this.delay(500);
 
-      // Step 4: Prepare UI
+      // Step 5: Prepare UI
       this.loadingMessage.set('Preparing interface...');
-      this.progress.set(0.8);
+      this.progress.set(0.9);
       await this.delay(500);
 
-      // Step 5: Complete
+      // Step 6: Complete
       this.loadingMessage.set('Ready!');
       this.progress.set(1);
       await this.delay(300);
 
       // Navigate to appropriate page based on mode
       const mode = this.settingsService.getMode();
-      if (mode.category) {
-        this.router.navigate(['/pos'], { replaceUrl: true });
-      } else if (mode.retail) {
-        this.router.navigate(['/pos'], { replaceUrl: true });
-      } else if (mode.restaurant || mode.distributor) {
-        this.router.navigate(['/menu'], { replaceUrl: true });
+      console.log('Navigation mode:', mode);
+      
+      if (mode.retail) {
+        this.router.navigate(['/pos-retail'], { replaceUrl: true });
+      } else if (mode.category) {
+        this.router.navigate(['/pos-category'], { replaceUrl: true });
+      } else if (mode.restaurant) {
+        this.router.navigate(['/pos-hospitality'], { replaceUrl: true });
       } else {
-        this.router.navigate(['/pos-products'], { replaceUrl: true });
+        // Default to category mode
+        this.router.navigate(['/pos-category'], { replaceUrl: true });
       }
 
     } catch (error) {
       console.error('Initialization error:', error);
-      this.loadingMessage.set('Error loading app. Please try again.');
+      this.loadingMessage.set('Error loading app. Continuing anyway...');
+      
+      // Still try to navigate even if there was an error
+      await this.delay(1000);
+      // Default to category mode on error
+      this.router.navigate(['/pos-category'], { replaceUrl: true });
     }
   }
 

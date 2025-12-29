@@ -15,8 +15,9 @@ import {
 } from 'ionicons/icons';
 import { addIcons } from 'ionicons';
 import { Product, CartItem, Customer, HeldTransaction } from '../../models';
-import { DbService } from '../../core/services/db.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ProductsService } from '../../core/services/products.service';
+import { SqliteService } from '../../core/services/sqlite.service';
 
 @Component({
   selector: 'app-pos-retail',
@@ -36,8 +37,9 @@ import { AuthService } from '../../core/services/auth.service';
 export class PosRetailPage implements OnInit {
   @ViewChild('barcodeInput') barcodeInput!: ElementRef<HTMLInputElement>;
 
-  private db = inject(DbService);
   private auth = inject(AuthService);
+  private productsService = inject(ProductsService);
+  private sqlite = inject(SqliteService);
   private menuCtrl = inject(MenuController);
 
   // Signals
@@ -91,12 +93,8 @@ export class PosRetailPage implements OnInit {
   }
 
   async loadProducts() {
-    const products = await this.db.find<Product>({
-      type: 'product',
-      active: true
-    });
-
-    this.products.set(products);
+    const products = await this.productsService.loadProducts();
+    this.products.set(products.filter(p => p.active));
   }
 
   async loadFavorites() {
@@ -240,17 +238,17 @@ export class PosRetailPage implements OnInit {
       terminalId: this.auth.currentTerminal()?._id || 'unknown'
     };
 
-    await this.db.put(held);
+    await this.sqlite.ensureInitialized();
+    await this.sqlite.addHeldTransaction(held);
     this.clearCart();
     this.showMessage('Transaction held successfully');
   }
 
   async loadHeldTransactions() {
-    const held = await this.db.find<HeldTransaction>({
-      type: 'held-transaction'
-    });
-
-    this.heldTransactions.set(held);
+    await this.sqlite.ensureInitialized();
+    const terminalId = this.auth.currentTerminal()?._id;
+    const held = await this.sqlite.getHeldTransactions(terminalId);
+    this.heldTransactions.set(held as HeldTransaction[]);
     this.showHeldTransactions.set(true);
   }
 
@@ -260,9 +258,8 @@ export class PosRetailPage implements OnInit {
     this.selectedCustomer.set(held.customer || null);
     this.calculateTotals();
 
-    // Delete held transaction
-    if (held._rev) {
-      await this.db.delete({ _id: held._id, _rev: held._rev } as any);
+    if (held._id) {
+      await this.sqlite.deleteHeldTransaction(held._id);
     }
     this.showHeldTransactions.set(false);
     this.showMessage('Transaction recalled');

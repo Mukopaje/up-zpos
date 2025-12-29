@@ -53,8 +53,8 @@ import {
 import { Product, Inventory } from '../../models';
 import { ProductsService } from '../../core/services/products.service';
 import { BarcodeService } from '../../core/services/barcode.service';
-import { DbService } from '../../core/services/db.service';
 import { StorageService } from '../../core/services/storage.service';
+import { SqliteService } from '../../core/services/sqlite.service';
 
 @Component({
   selector: 'app-inventory',
@@ -99,8 +99,8 @@ export class InventoryPage implements OnInit {
   private loadingCtrl = inject(LoadingController);
   private productsService = inject(ProductsService);
   private barcodeService = inject(BarcodeService);
-  private db = inject(DbService);
   private storage = inject(StorageService);
+  private sqlite = inject(SqliteService);
 
   // State
   products = this.productsService.products;
@@ -196,11 +196,20 @@ export class InventoryPage implements OnInit {
 
   private async loadAdjustments() {
     try {
-      const result = await this.db.find<Inventory>({
-        type: 'inventory'
-      });
+      await this.sqlite.ensureInitialized();
+      const rows = await this.sqlite.getInventoryRecords();
+      const result: Inventory[] = rows.map(r => ({
+        _id: r.id!,
+        type: 'inventory',
+        product: r.product_id,
+        quantity: r.quantity,
+        action: r.action as any,
+        reference: r.reference || undefined,
+        notes: r.notes || undefined,
+        createdAt: Date.parse(r.created_at || new Date().toISOString()),
+        createdBy: r.created_by
+      }));
 
-      // Sort by date descending
       const sorted = result.sort((a, b) => b.createdAt - a.createdAt);
       this.adjustments.set(sorted);
     } catch (error) {
@@ -355,7 +364,17 @@ export class InventoryPage implements OnInit {
         createdBy: userId
       };
 
-      await this.db.put(adjustment);
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.addInventoryRecord({
+        id: adjustment._id,
+        product_id: adjustment.product,
+        quantity: adjustment.quantity,
+        action: adjustment.action,
+        reference: adjustment.reference,
+        notes: adjustment.notes,
+        created_at: new Date(adjustment.createdAt).toISOString(),
+        created_by: adjustment.createdBy
+      });
 
       // Reload adjustments
       await this.loadAdjustments();

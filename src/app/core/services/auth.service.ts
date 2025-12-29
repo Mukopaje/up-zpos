@@ -1,10 +1,13 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { StorageService } from './storage.service';
-import { DbService } from './db.service';
 import { RolesService } from './roles.service';
 import { TerminalsService } from './terminals.service';
+import { UsersService } from './users.service';
 import { User, Role, Terminal, BusinessLicense } from '../../models';
+import { environment } from '../../../environments/environment';
 
 export interface AuthState {
   user: User | null;
@@ -19,15 +22,50 @@ export interface LicenseState {
   isActivated: boolean;
 }
 
+export interface LoginResponse {
+  access_token: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+  };
+}
+
+export interface LicenseValidationResponse {
+  tenantId: string;
+  businessName: string;
+}
+
+export interface RegisterTenantResponse {
+  licenseKey: string;
+  tenant: {
+    id: string;
+    businessName: string;
+  };
+  access_token: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+  };
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
   private storage = inject(StorageService);
   private router = inject(Router);
-  private db = inject(DbService);
+  private http = inject(HttpClient);
   private rolesService = inject(RolesService);
   private terminalsService = inject(TerminalsService);
+  private usersService = inject(UsersService);
+  
+  private readonly API_URL = environment.apiUrl;
 
   // Signals for reactive state
   private authState = signal<AuthState>({
@@ -83,7 +121,7 @@ export class AuthService {
     if (token && userId && expires) {
       // Load user from DB
       try {
-        const user = await this.db.get<User>(userId);
+        const user = await this.usersService.getUserById(userId);
         if (user && user.type === 'user') {
           // Load role
           const role = await this.rolesService.getRole(user.roleId);
@@ -104,40 +142,49 @@ export class AuthService {
   }
 
   private async initLicense() {
-    try {
-      const licenseId = await this.storage.get<string>('licenseId');
-      if (licenseId) {
-        const license = await this.db.get<BusinessLicense>(licenseId);
-        if (license && license.type === 'license') {
-          // Check if license is still valid
-          const now = Date.now();
-          const isActivated = license.status === 'active' && license.expiresAt > now;
-          
-          this.licenseState.set({ license, isActivated });
-        }
-      }
-    } catch (error) {
-      console.error('Error loading license:', error);
-    }
+    // License persistence is now driven by backend + storage (tenantId/businessName)
+    this.licenseState.set({ license: null, isActivated: await this.hasActiveLicense() });
   }
 
-  // Simple hash function for PINs (for demo - use bcrypt in production)
+  /**
+   * Hash password using Web Crypto API (secure in browser)
+   */
+  private async hashPassword(password: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+  }
+
+  /**
+   * Verify password against hash
+   */
+  private async verifyPassword(password: string, hash: string): Promise<boolean> {
+    const passwordHash = await this.hashPassword(password);
+    return passwordHash === hash;
+  }
+
+  /**
+   * Hash PIN (simpler for 4-6 digit codes)
+   */
   private async hashPin(pin: string): Promise<string> {
-    // In production, use a proper crypto library like bcrypt
-    // For now, just add a simple prefix to show it's "hashed"
-    return `hashed_${pin}`;
+    return await this.hashPassword(pin);
   }
 
+  /**
+   * Verify PIN against hash
+   */
   private async verifyPin(pin: string, hash: string): Promise<boolean> {
-    // In production, use bcrypt.compare()
-    // Support both hashed and plain text PINs for backward compatibility
-    return hash === `hashed_${pin}` || hash === pin;
+    return await this.verifyPassword(pin, hash);
   }
 
   // License Management
   async hasActiveLicense(): Promise<boolean> {
-    await this.initLicense();
-    return this.licenseState().isActivated;
+    // In new multi-tenant architecture, having a tenantId means license is validated
+    const tenantId = await this.storage.get<string>('tenantId');
+    return !!tenantId;
   }
 
   async getBusinessSettings(): Promise<{ businessName: string } | null> {
@@ -145,172 +192,324 @@ export class AuthService {
     return license ? { businessName: license.businessName } : null;
   }
 
+  // Deprecated: Use registerTenant and validateLicense instead
   async activateLicense(email: string, password: string): Promise<boolean> {
-    try {
-      // TODO: Call cloud API to verify credentials and get license
-      // For now, create a mock license
-      const deviceId = await this.getDeviceId();
-      
-      // Mock API call - in production, this would validate against server
-      const mockLicense: BusinessLicense = {
-        _id: 'license-1',
-        type: 'license',
-        businessEmail: email,
-        passwordHash: await this.hashPin(password), // Use proper password hashing
-        businessName: 'Demo Business',
-        licenseKey: 'DEMO-LICENSE-KEY',
-        activatedAt: Date.now(),
-        expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000), // 1 year
-        deviceId,
-        status: 'active',
-        maxUsers: 10,
-        features: ['pos', 'inventory', 'reports', 'cloud-sync'],
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      };
-
-      // Save to database
-      await this.db.put(mockLicense);
-      await this.storage.set('licenseId', mockLicense._id);
-
-      // Update state
-      this.licenseState.set({ license: mockLicense, isActivated: true });
-
-      return true;
-    } catch (error) {
-      console.error('License activation error:', error);
-      return false;
-    }
+    console.warn('activateLicense is deprecated. Use the new registration flow.');
+    return false;
   }
 
+  // Deprecated: Use logout instead
   async logoutLicense(): Promise<void> {
-    const license = this.licenseState().license;
-    if (license) {
-      // Deactivate license
-      license.status = 'suspended';
-      await this.db.put(license);
-    }
-
-    await this.storage.remove('licenseId');
-    this.licenseState.set({ license: null, isActivated: false });
-    
-    // Also logout user
+    console.warn('logoutLicense is deprecated. Use logout instead.');
     await this.logout();
   }
 
-  private async getDeviceId(): Promise<string> {
-    let deviceId = await this.storage.get<string>('deviceId');
-    if (!deviceId) {
-      deviceId = 'device-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-      await this.storage.set('deviceId', deviceId);
+  /**
+   * Validate license key and get tenant information
+   * Step 1 of multi-tenant authentication
+   */
+  async validateLicense(licenseKey: string): Promise<LicenseValidationResponse | null> {
+    try {
+      const response = await firstValueFrom(
+        this.http.post<LicenseValidationResponse>(`${this.API_URL}/auth/validate-license`, { licenseKey })
+      );
+
+      if (response.tenantId) {
+        // Store tenant info for subsequent authentication
+        await this.storage.set('tenantId', response.tenantId);
+        await this.storage.set('businessName', response.businessName);
+        return response;
+      }
+      return null;
+    } catch (error) {
+      console.error('License validation error:', error);
+      return null;
     }
-    return deviceId;
   }
 
-  // PIN-based login (for POS users)
-  async loginWithPin(pin: string): Promise<boolean> {
+  private extractBackendMessage(error: any): string {
+    const httpError = error as HttpErrorResponse;
+
+    if (httpError && httpError.error) {
+      const payload = httpError.error as any;
+
+      if (typeof payload === 'string') {
+        return payload;
+      }
+
+      if (Array.isArray(payload.message)) {
+        return payload.message.join(' ');
+      }
+
+      if (typeof payload.message === 'string') {
+        return payload.message;
+      }
+
+      if (typeof payload.detail === 'string') {
+        return payload.detail;
+      }
+    }
+
+    if (httpError && typeof httpError.message === 'string') {
+      return httpError.message;
+    }
+
+    if (error && typeof error.message === 'string') {
+      return error.message;
+    }
+
+    return '';
+  }
+
+  private mapToFriendlyMessage(error: any): string {
+    const httpError = error as HttpErrorResponse;
+    const payload = httpError?.error as any;
+
+    // Check for explicit error code from backend
+    if (payload?.code === 'EMAIL_ALREADY_EXISTS') {
+      return 'An account with this email already exists. Please log in instead, or reset your password if you have forgotten it.';
+    }
+
+    // Fallback to text matching for backward compatibility
+    const raw = (this.extractBackendMessage(error) || '').toLowerCase();
+
+    if ((raw.includes('duplicate key value') || raw.includes('already exists')) && raw.includes('email')) {
+      return 'An account with this email already exists. Please log in instead, or reset your password if you have forgotten it.';
+    }
+
+    return 'Something went wrong. Please try again.';
+  }
+
+  /**
+   * PIN-based login with tenant context
+   * Step 2 of multi-tenant authentication
+   */
+  async loginWithPin(pin: string, tenantId?: string): Promise<boolean> {
     try {
-      // Find user by PIN
-      const users = await this.db.find<User>({
-        type: 'user'
-      });
+      // Get tenantId from parameter or storage
+      const tenant = tenantId || await this.storage.get<string>('tenantId');
       
-      // Find user with matching PIN (await the async verifyPin)
-      let user: User | undefined;
-      for (const u of users) {
-        if (u.active && await this.verifyPin(pin, u.pin)) {
-          user = u;
-          break;
+      if (!tenant) {
+        console.error('No tenant context - validate license first');
+        return false;
+      }
+
+      // Call backend validate-pin endpoint
+      const response = await firstValueFrom(
+        this.http.post<LoginResponse>(`${this.API_URL}/auth/validate-pin`, { 
+          tenantId: tenant, 
+          pin 
+        })
+      );
+
+      if (response.access_token && response.user) {
+        console.log('PIN validation successful, saving auth data...');
+        
+        // Save tokens and tenant info
+        await this.storage.set('token', response.access_token);
+        await this.storage.set('tenantId', tenant);
+        
+        const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+        await this.storage.set('expires', expires);
+        await this.storage.set('userId', response.user.id);
+
+        // Map backend role to frontend role ID (backend: "admin", frontend: "role_admin")
+        const roleMapping: Record<string, string> = {
+          'admin': 'role_admin',
+          'manager': 'role_manager',
+          'cashier': 'role_cashier',
+          'waiter': 'role_waiter',
+          'kitchen': 'role_kitchen'
+        };
+        
+        const mappedRoleId = roleMapping[response.user.role] || `role_${response.user.role}`;
+        
+        // Convert backend user format to local User model
+        const user: User = {
+          _id: response.user.id,
+          type: 'user',
+          tenantId: tenant,
+          firstName: response.user.firstName,
+          lastName: response.user.lastName,
+          email: response.user.email,
+          roleId: mappedRoleId,
+          active: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          lastLogin: Date.now()
+        };
+
+        console.log('Saving user to local store:', user._id);
+        const existingUser = await this.usersService.getUserById(user._id);
+        if (existingUser) {
+          await this.usersService.updateUser({ ...existingUser, ...user });
+        } else {
+          await this.usersService.createUser({
+            tenantId: user.tenantId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            email: user.email,
+            phone: user.phone,
+            roleId: user.roleId,
+            role: user.role,
+            permissions: user.permissions,
+            pin: user.pin,
+            active: user.active,
+            allowedTerminals: user.allowedTerminals,
+            defaultTerminal: user.defaultTerminal,
+            posMode: user.posMode,
+            language: user.language,
+            avatar: user.avatar,
+            passwordHash: user.passwordHash,
+            pinHash: user.pinHash
+          });
         }
+
+        // Load or create role
+        console.log('Loading role:', user.roleId);
+        let role = await this.rolesService.getRole(user.roleId);
+        if (!role) {
+          console.log('Role not found, initializing default roles');
+          // Initialize default roles if they don't exist
+          await this.rolesService.initializeDefaultRoles();
+          // Try loading the role again
+          role = await this.rolesService.getRole(user.roleId);
+          
+          if (!role) {
+            console.error('Failed to load role after initialization:', user.roleId);
+            // This shouldn't happen, but create a fallback
+            throw new Error(`Role ${user.roleId} not found`);
+          }
+          console.log('Role loaded after initialization:', role.name);
+        } else {
+          console.log('Role loaded:', role.name);
+        }
+
+        // Update state
+        console.log('Updating auth state');
+        this.authState.set({
+          user,
+          role: role || null,
+          terminal: null,
+          token: response.access_token,
+          expires
+        });
+
+        console.log('Login completed successfully');
+        return true;
       }
-      
-      if (!user) {
-        return false;
-      }
-      
-      // Load role
-      const role = await this.rolesService.getRole(user.roleId);
-      if (!role) {
-        console.error('User role not found');
-        return false;
-      }
-
-      const mockToken = 'mock-jwt-token-' + Date.now();
-      const expires = new Date().getTime() + (12 * 60 * 60 * 1000); // 12 hours for PIN login
-
-      // Save to storage
-      await this.storage.set('userId', user._id);
-      await this.storage.set('token', mockToken);
-      await this.storage.set('expires', expires);
-      
-      // Update last login
-      user.lastLogin = Date.now();
-      await this.db.put(user);
-
-      // Update state
-      this.authState.set({
-        user,
-        role,
-        terminal: null,
-        token: mockToken,
-        expires
-      });
-
-      return true;
+      console.log('No access token or user in response');
+      return false;
     } catch (error) {
       console.error('PIN login error:', error);
       return false;
     }
   }
 
-  async login(username: string, password: string, pin?: string): Promise<boolean> {
+  /**
+   * Register a new tenant (business)
+   * Creates tenant account, generates license key, and creates admin user
+   */
+  async registerTenant(data: {
+    businessName: string;
+    ownerEmail: string;
+    ownerPhone?: string;
+    adminPin: string;
+    adminFirstName: string;
+    adminLastName: string;
+  }): Promise<RegisterTenantResponse | null> {
     try {
-      // Find user by username or pin
-      const users = await this.db.find<User>({
-        type: 'user'
-      });
-      
-      const user = users.find(u => u.username === username || (pin && u.pin === pin));
-      
-      if (!user || !user.active) {
-        return false;
+      const response = await firstValueFrom(
+        this.http.post<RegisterTenantResponse>(`${this.API_URL}/auth/register`, data)
+      );
+
+      if (response.licenseKey && response.access_token) {
+        // Store license and tenant info
+        await this.storage.set('licenseKey', response.licenseKey);
+        await this.storage.set('tenantId', response.tenant.id);
+        await this.storage.set('businessName', response.tenant.businessName);
+        await this.storage.set('token', response.access_token);
+        
+        const expires = Date.now() + (24 * 60 * 60 * 1000);
+        await this.storage.set('expires', expires);
+        await this.storage.set('userId', response.user.id);
+
+        // Map backend role to frontend role ID
+        const roleMapping: Record<string, string> = {
+          'admin': 'role_admin',
+          'manager': 'role_manager',
+          'cashier': 'role_cashier',
+          'waiter': 'role_waiter',
+          'kitchen': 'role_kitchen'
+        };
+        
+        const mappedRoleId = roleMapping[response.user.role] || `role_${response.user.role}`;
+
+        // Convert to local User model
+        const user: User = {
+          _id: response.user.id,
+          type: 'user',
+          tenantId: response.tenant.id,
+          firstName: response.user.firstName,
+          lastName: response.user.lastName,
+          email: response.user.email,
+          roleId: mappedRoleId,
+          active: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        const existingUser = await this.usersService.getUserById(user._id);
+        if (existingUser) {
+          await this.usersService.updateUser({ ...existingUser, ...user });
+        } else {
+          await this.usersService.createUser({
+            tenantId: user.tenantId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            username: user.username,
+            email: user.email,
+            phone: user.phone,
+            roleId: user.roleId,
+            role: user.role,
+            permissions: user.permissions,
+            pin: user.pin,
+            active: user.active,
+            allowedTerminals: user.allowedTerminals,
+            defaultTerminal: user.defaultTerminal,
+            posMode: user.posMode,
+            language: user.language,
+            avatar: user.avatar,
+            passwordHash: user.passwordHash,
+            pinHash: user.pinHash
+          });
+        }
+        
+        // Initialize default roles
+        await this.rolesService.initializeDefaultRoles();
+        
+        // Load the admin role
+        const role = await this.rolesService.getRole(user.roleId);
+        if (!role) {
+          throw new Error('Failed to load admin role after initialization');
+        }
+
+        this.authState.set({
+          user,
+          role,
+          terminal: null,
+          token: response.access_token,
+          expires
+        });
+
+        return response;
       }
-      
-      // TODO: Verify password hash
-      // For now, accept any password for development
-      
-      // Load role
-      const role = await this.rolesService.getRole(user.roleId);
-      if (!role) {
-        console.error('User role not found');
-        return false;
-      }
-
-      const mockToken = 'mock-jwt-token';
-      const expires = new Date().getTime() + (24 * 60 * 60 * 1000); // 24 hours
-
-      // Save to storage
-      await this.storage.set('userId', user._id);
-      await this.storage.set('token', mockToken);
-      await this.storage.set('expires', expires);
-      
-      // Update last login
-      user.lastLogin = Date.now();
-      await this.db.put(user);
-
-      // Update state
-      this.authState.set({
-        user,
-        role,
-        terminal: null,
-        token: mockToken,
-        expires
-      });
-
-      return true;
+      return null;
     } catch (error) {
-      console.error('Login error:', error);
-      return false;
+      console.error('Tenant registration error:', error);
+      const message = this.mapToFriendlyMessage(error);
+      throw new Error(message);
     }
   }
 
@@ -339,8 +538,107 @@ export class AuthService {
     return true;
   }
 
+  /**
+   * Create new user within current tenant
+   * Requires admin privileges
+   */
+  async createUser(userData: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    pin: string;
+    role?: string;
+  }): Promise<{ success: boolean; message?: string; userId?: string }> {
+    try {
+      const currentUser = this.currentUser();
+      const tenantId = await this.storage.get<string>('tenantId');
+      
+      if (!currentUser || !tenantId) {
+        return { success: false, message: 'Not authenticated or no tenant context' };
+      }
+
+      const response = await firstValueFrom(
+        this.http.post<{ access_token: string; user: any }>(`${this.API_URL}/auth/create-user`, userData)
+      );
+
+      if (response.user) {
+        // Save new user to local DB
+        const newUser: User = {
+          _id: response.user.id,
+          type: 'user',
+          tenantId,
+          firstName: response.user.firstName,
+          lastName: response.user.lastName,
+          email: response.user.email,
+          roleId: response.user.role,
+          active: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
+
+        const existingUser = await this.usersService.getUserById(newUser._id);
+        if (existingUser) {
+          await this.usersService.updateUser({ ...existingUser, ...newUser });
+        } else {
+          await this.usersService.createUser({
+            tenantId: newUser.tenantId,
+            firstName: newUser.firstName,
+            lastName: newUser.lastName,
+            username: newUser.username,
+            email: newUser.email,
+            phone: newUser.phone,
+            roleId: newUser.roleId,
+            role: newUser.role,
+            permissions: newUser.permissions,
+            pin: newUser.pin,
+            active: newUser.active,
+            allowedTerminals: newUser.allowedTerminals,
+            defaultTerminal: newUser.defaultTerminal,
+            posMode: newUser.posMode,
+            language: newUser.language,
+            avatar: newUser.avatar,
+            passwordHash: newUser.passwordHash,
+            pinHash: newUser.pinHash
+          });
+        }
+
+        return {
+          success: true,
+          message: 'User created successfully',
+          userId: newUser._id
+        };
+      }
+      
+      return { success: false, message: 'Failed to create user' };
+    } catch (error: any) {
+      console.error('User creation error:', error);
+      return {
+        success: false,
+        message: this.mapToFriendlyMessage(error)
+      };
+    }
+  }
+
+  /**
+   * Get current tenant ID
+   */
+  async getTenantId(): Promise<string | null> {
+    return await this.storage.get<string>('tenantId');
+  }
+
+  /**
+   * Get business name from tenant
+   */
+  async getBusinessName(): Promise<string | null> {
+    return await this.storage.get<string>('businessName');
+  }
+
+  /**
+   * Logout and clear all auth data
+   * Note: Backend doesn't have logout endpoint yet
+   */
   async logout(): Promise<void> {
-    // Clear storage
+    // Clear storage (keep tenantId and licenseKey for re-login)
     await this.storage.remove('userId');
     await this.storage.remove('token');
     await this.storage.remove('expires');
@@ -376,6 +674,15 @@ export class AuthService {
     return this.authState().token;
   }
 
+  async getTokenAsync(): Promise<string | null> {
+    // First check in-memory state
+    const memoryToken = this.authState().token;
+    if (memoryToken) return memoryToken;
+    
+    // Fallback to storage (in case app just restarted)
+    return await this.storage.get<string>('token');
+  }
+
   // RBAC Methods
   hasPermission(module: string, action: string): boolean {
     const user = this.currentUser();
@@ -384,9 +691,11 @@ export class AuthService {
     if (!user || !role) return false;
     
     // Check user-specific permission overrides first
-    const userPermission = user.permissions.find(p => p.module === module);
-    if (userPermission) {
-      return userPermission.actions.includes(action);
+    if (user.permissions) {
+      const userPermission = user.permissions.find(p => p.module === module);
+      if (userPermission) {
+        return userPermission.actions.includes(action);
+      }
     }
     
     // Fall back to role permissions

@@ -1,8 +1,10 @@
-import { Injectable, signal } from '@angular/core';
-import { DbService } from './db.service';
+import { Injectable, signal, inject } from '@angular/core';
+import { SqliteService, Sale } from './sqlite.service';
 import { StorageService } from './storage.service';
 import { CartService } from './cart.service';
-import { Order, CartItem, Customer, Product } from '../../models';
+import { Order, CartItem, Customer } from '../../models';
+import { ProductsService } from './products.service';
+import { CustomersService } from './customers.service';
 
 export interface Payment {
   _id?: string;
@@ -30,9 +32,11 @@ export class OrdersService {
   location = signal<string>('');
   warehouse = signal<string>('');
   userId = signal<string>('');
+  private sqlite = inject(SqliteService);
+  private productsService = inject(ProductsService);
+  private customersService = inject(CustomersService);
 
   constructor(
-    private db: DbService,
     private storage: StorageService,
     private cart: CartService
   ) {
@@ -68,19 +72,12 @@ export class OrdersService {
    */
   private async loadLastInvoiceNumber(): Promise<void> {
     try {
-      const result = await this.db.query<Order>({
-        selector: {
-          type: 'order',
-          createdAt: { $gte: 0 }
-        },
-        sort: [{ type: 'desc' }, { createdAt: 'desc' }],
-        limit: 1
-      });
+      await this.sqlite.ensureInitialized();
+      const sales = await this.sqlite.getSales(1);
 
-      // result is FindResponse<Order>
-      if ('docs' in result && result.docs.length > 0) {
-        const lastOrder = result.docs[0];
-        const match = lastOrder.orderNumber?.match(/\d+$/);
+      if (sales.length > 0) {
+        const lastOrder = sales[0];
+        const match = lastOrder.order_number?.match(/\d+$/);
         if (match) {
           this.currentInvoiceNumber.set(parseInt(match[0], 10) + 1);
         }
@@ -113,6 +110,44 @@ export class OrdersService {
     return stringArr.join('-');
   }
 
+  private mapSaleToOrder(sale: Sale): Order {
+    const payload = typeof sale.items === 'string' ? JSON.parse(sale.items) : sale.items || {};
+    const items: CartItem[] = payload.items || [];
+    const amountPaid: number = payload.amountPaid ?? sale.total;
+    const change: number = payload.change ?? 0;
+    const notes: string | undefined = payload.notes;
+    const customer: Customer | undefined = payload.customer;
+    const payments: Payment[] | undefined = payload.payments;
+    const createdAt = sale.created_at ? Date.parse(sale.created_at) : Date.now();
+    const updatedAt = sale.updated_at ? Date.parse(sale.updated_at) : createdAt;
+
+    return {
+      _id: sale.id || '',
+      type: 'order',
+      orderNumber: sale.order_number,
+      items,
+      subtotal: sale.subtotal,
+      tax: sale.tax || 0,
+      discount: sale.discount || 0,
+      total: sale.total,
+      amountPaid,
+      change,
+      paymentMethod: sale.payment_method,
+      status: sale.payment_status === 'paid' ? 'completed' : 'processed',
+      customer,
+      notes,
+      payment: payments?.map(p => ({
+        type: p.type,
+        amount: p.amount,
+        reference: p.reference,
+        timestamp: p.timestamp
+      })),
+      createdBy: payload.createdBy || this.userId(),
+      createdAt,
+      updatedAt
+    } as Order;
+  }
+
   /**
    * Create order from current cart
    */
@@ -121,6 +156,8 @@ export class OrdersService {
     if (cartItems.length === 0) {
       throw new Error('Cannot create order with empty cart');
     }
+
+    await this.sqlite.ensureInitialized();
 
     const summary = this.cart.summary();
     const timestamp = new Date().toISOString();
@@ -133,53 +170,58 @@ export class OrdersService {
       throw new Error('Insufficient payment amount');
     }
 
-    const order: Order = {
-      _id: orderId,
-      type: 'order',
-      orderNumber: invoiceNumber,
+    const payload: any = {
       items: cartItems,
-      subtotal: summary.subtotal,
-      tax: summary.tax,
-      discount: summary.discount + summary.ticketDiscount,
-      total: summary.total,
       amountPaid: data.amountPaid,
       change: Math.max(0, change),
-      paymentMethod: data.paymentType,
-      status: 'completed',
-      customer: data.customer,
       notes: data.notes,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      customer: data.customer,
+      payments: data.payments,
       createdBy: this.userId(),
-      completedAt: Date.now()
+      location: this.location(),
+      warehouse: this.warehouse()
     };
 
     try {
-      // Save order to database
-      await this.db.put(order);
+      const sale: Sale = {
+        id: orderId,
+        order_number: invoiceNumber,
+        customer_id: data.customer?._id,
+        total: summary.total,
+        subtotal: summary.subtotal,
+        tax: summary.tax,
+        discount: summary.discount + summary.ticketDiscount,
+        payment_method: data.paymentType,
+        payment_status: change <= 0 ? 'paid' : 'partial',
+        items: payload
+      };
 
-      // Process payments if multiple
-      if (data.payments && data.payments.length > 0) {
-        await this.savePayments(orderId, data.payments);
+      await this.sqlite.addSale(sale);
+
+      // Update inventory in SQLite
+      for (const item of cartItems) {
+        try {
+          await this.productsService.reduceQuantity(item.product._id, item.quantity);
+        } catch (err) {
+          console.error(`Error updating inventory for ${item.product._id}:`, err);
+        }
       }
-
-      // Update inventory
-      await this.updateInventory(cartItems);
 
       // Update customer account if account sale
       if (data.customer && data.paymentType === 'account') {
-        await this.updateCustomerBalance(data.customer, summary.total);
+        await this.customersService.addCredit(data.customer._id, summary.total);
       }
 
       // Clear cart
       this.cart.clearCart();
 
-      // Add to local orders list
+      const createdOrder = this.mapSaleToOrder({ ...sale, id: orderId });
+
       const orders = [...this.orders()];
-      orders.unshift(order);
+      orders.unshift(createdOrder);
       this.orders.set(orders);
 
-      return order;
+      return createdOrder;
     } catch (error) {
       console.error('Error creating order:', error);
       throw error;
@@ -190,55 +232,19 @@ export class OrdersService {
    * Save payment details
    */
   private async savePayments(orderId: string, payments: Payment[]): Promise<void> {
-    const paymentDocs = payments.map(payment => ({
-      _id: `PAY_${new Date().toISOString()}_${this.getUniqueId(1)}`,
-      type: 'payment',
-      orderId: orderId,
-      paymentType: payment.type,
-      amount: payment.amount,
-      reference: payment.reference,
-      timestamp: payment.timestamp || Date.now(),
-      createdAt: Date.now(),
-      createdBy: this.userId()
-    }));
-
-    try {
-      await this.db.bulkDocs(paymentDocs);
-    } catch (error) {
-      console.error('Error saving payments:', error);
-      throw error;
-    }
+    // Payments are stored inside the sale payload for now
+    console.log('savePayments called - payments are stored within sale payload in SQLite.', orderId, payments);
   }
 
   /**
    * Update inventory after sale
    */
   private async updateInventory(items: CartItem[]): Promise<void> {
-    const warehouse = this.warehouse();
-    const location = this.location();
-
     for (const item of items) {
       try {
-        const product = await this.db.get<Product>(item.product._id);
-        
-        if (product && product.inventory) {
-          // Find inventory for current location/warehouse
-          const inventoryIndex = product.inventory.findIndex(
-            inv => inv.location === location && inv.warehouse === warehouse
-          );
-
-          if (inventoryIndex >= 0) {
-            // Update quantity
-            product.inventory[inventoryIndex].qty -= item.quantity;
-            product.updatedAt = Date.now();
-            product.updatedBy = this.userId();
-
-            await this.db.put(product);
-          }
-        }
+        await this.productsService.reduceQuantity(item.product._id, item.quantity);
       } catch (error) {
         console.error(`Error updating inventory for ${item.product._id}:`, error);
-        // Continue with other items even if one fails
       }
     }
   }
@@ -248,15 +254,7 @@ export class OrdersService {
    */
   private async updateCustomerBalance(customer: Customer, amount: number): Promise<void> {
     try {
-      const customerDoc = await this.db.get<Customer>(customer._id);
-      
-      if (customerDoc) {
-        // Add to balance (negative balance means they owe money)
-        customerDoc.balance = (customerDoc.balance || 0) + amount;
-        customerDoc.updatedAt = Date.now();
-
-        await this.db.put(customerDoc);
-      }
+      await this.customersService.addCredit(customer._id, amount);
     } catch (error) {
       console.error('Error updating customer balance:', error);
       throw error;
@@ -268,32 +266,20 @@ export class OrdersService {
    */
   async getOrders(startDate?: Date, endDate?: Date, salesPerson?: string): Promise<Order[]> {
     try {
-      const start = startDate ? startDate.toISOString() : null;
-      const end = endDate ? endDate.toISOString() : null;
+      await this.sqlite.ensureInitialized();
+      const sales = await this.sqlite.getSales(1000);
+      let orders = sales.map(s => this.mapSaleToOrder(s));
 
-      let selector: any = {
-        type: 'order',
-        createdAt: { $gte: 0 }
-      };
-
-      if (start && end) {
-        selector._id = {
-          $gte: `ORD_${start}`,
-          $lte: `ORD_${end}\ufff0`
-        };
+      if (startDate && endDate) {
+        const startTime = startDate.getTime();
+        const endTime = endDate.getTime();
+        orders = orders.filter(o => o.createdAt >= startTime && o.createdAt <= endTime);
       }
 
       if (salesPerson) {
-        selector.createdBy = salesPerson;
+        orders = orders.filter(o => o.createdBy === salesPerson);
       }
 
-      const result = await this.db.query<Order>({
-        selector,
-        sort: [{ type: 'desc' }, { createdAt: 'desc' }]
-      });
-
-      // Check if result has docs property (FindResponse)
-      const orders = 'docs' in result ? result.docs : [];
       this.orders.set(orders);
       return orders;
     } catch (error) {
@@ -307,8 +293,9 @@ export class OrdersService {
    */
   async getOrder(orderId: string): Promise<Order | null> {
     try {
-      const order = await this.db.get<Order>(orderId);
-      return order;
+      await this.sqlite.ensureInitialized();
+      const sale = await this.sqlite.getSaleById(orderId);
+      return sale ? this.mapSaleToOrder(sale) : null;
     } catch (error) {
       console.error('Error getting order:', error);
       return null;
@@ -325,66 +312,53 @@ export class OrdersService {
     reason: string
   ): Promise<void> {
     try {
-      const order = await this.db.get<Order>(orderId);
-      if (!order) {
+      await this.sqlite.ensureInitialized();
+      const sale = await this.sqlite.getSaleById(orderId);
+      if (!sale) {
         throw new Error('Order not found');
       }
 
-      const itemIndex = order.items.findIndex(item => item.product._id === productId);
+      const payload = typeof sale.items === 'string' ? JSON.parse(sale.items) : sale.items || {};
+      const items: CartItem[] = payload.items || [];
+
+      const itemIndex = items.findIndex(item => item.product._id === productId);
       if (itemIndex < 0) {
         throw new Error('Item not found in order');
       }
-
-      const item = order.items[itemIndex];
+      const item = items[itemIndex];
       const returnAmount = (item.price * quantity);
 
-      // Create refund document
-      const refundId = `RFN_${new Date().toISOString()}`;
-      const refund = {
-        _id: refundId,
-        type: 'refund',
-        orderId: orderId,
-        productId: productId,
-        quantity: quantity,
-        amount: returnAmount,
-        reason: reason,
-        location: this.location(),
-        warehouse: this.warehouse(),
-        createdAt: Date.now(),
-        createdBy: this.userId()
-      };
-
-      await this.db.put(refund);
-
-      // Update order
+      // Update order items in payload
       if (item.quantity === quantity) {
         // Remove item completely
-        order.items.splice(itemIndex, 1);
+        items.splice(itemIndex, 1);
       } else {
         // Reduce quantity
-        order.items[itemIndex].quantity -= quantity;
-        order.items[itemIndex].total = order.items[itemIndex].quantity * order.items[itemIndex].price;
+        items[itemIndex].quantity -= quantity;
+        items[itemIndex].total = items[itemIndex].quantity * items[itemIndex].price;
       }
+      payload.items = items;
 
       // Recalculate totals
-      order.subtotal = order.items.reduce((sum, i) => sum + i.total, 0);
+      const order = this.mapSaleToOrder({ ...sale, items: payload });
+      order.subtotal = items.reduce((sum, i) => sum + i.total, 0);
       order.total = order.subtotal + order.tax - order.discount;
-      order.updatedAt = Date.now();
 
-      await this.db.put(order);
+      await this.sqlite.updateSale(orderId, {
+        subtotal: order.subtotal,
+        total: order.total,
+        items: payload
+      });
 
-      // Return to inventory
-      const product = await this.db.get<Product>(productId);
-      if (product && product.inventory) {
-        const inventoryIndex = product.inventory.findIndex(
-          inv => inv.location === this.location() && inv.warehouse === this.warehouse()
-        );
-
-        if (inventoryIndex >= 0) {
-          product.inventory[inventoryIndex].qty += quantity;
-          product.updatedAt = Date.now();
-          await this.db.put(product);
+      // Return to inventory (increase stock)
+      try {
+        const product = await this.sqlite.getProductById(productId);
+        if (product) {
+          const currentQty = product.stock_quantity ?? 0;
+          await this.sqlite.updateProduct(productId, { stock_quantity: currentQty + quantity });
         }
+      } catch (err) {
+        console.error('Error returning item to inventory:', err);
       }
     } catch (error) {
       console.error('Error processing return:', error);
@@ -424,16 +398,10 @@ export class OrdersService {
    */
   async searchByInvoice(invoiceNumber: string): Promise<Order[]> {
     try {
-      const result = await this.db.query<Order>({
-        selector: {
-          type: 'order',
-          orderNumber: {
-            $regex: `(?i)${invoiceNumber}`
-          }
-        }
-      });
-
-      return 'docs' in result ? result.docs : [];
+      await this.sqlite.ensureInitialized();
+      const sales = await this.sqlite.getSales(500);
+      const orders = sales.map(s => this.mapSaleToOrder(s));
+      return orders.filter(o => (o.orderNumber || '').toLowerCase().includes(invoiceNumber.toLowerCase()));
     } catch (error) {
       console.error('Error searching orders:', error);
       return [];

@@ -13,10 +13,9 @@
 
   <link rel="icon" type="image/png" href="assets/icon/favicon.png" />
 
-  <!-- Polyfill for PouchDB - define global before any scripts load -->
-  <script>
-    window.global = window;
-  </script>
+  <!-- jeep-sqlite web component for SQLite support in the browser -->
+  <script type="module" src="https://unpkg.com/jeep-sqlite/dist/jeep-sqlite/jeep-sqlite.esm.js"></script>
+  <script nomodule src="https://unpkg.com/jeep-sqlite/dist/jeep-sqlite/jeep-sqlite.js"></script>
 
   <!-- add to homescreen for ios -->
   <meta name="mobile-web-app-capable" content="yes" />
@@ -25,6 +24,9 @@
 </head>
 
 <body>
+  <!-- Required for @capacitor-community/sqlite on web -->
+  <!-- Enable autoSave so jeep-sqlite automatically saves DB changes to the web store -->
+  <jeep-sqlite autoSave="true"></jeep-sqlite>
   <app-root></app-root>
 </body>
 </html>

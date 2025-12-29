@@ -68,7 +68,8 @@ export interface Product {
   type: 'product';
   name: string;
   barcode: string;
-  category: string;
+  category: string; // @deprecated - kept for backward compatibility, use categories instead
+  categories?: string[]; // Array of category IDs - supports multiple categories
   price: number;
   cost: number;
   quantity: number;
@@ -79,7 +80,7 @@ export interface Product {
   active: boolean;
   inventory?: ItemInv[];
   tags?: string[]; // For better search and organization
-  subcategory?: string;
+  subcategory?: string; // @deprecated - use categories with parentId instead
   favorite?: boolean; // Quick access in retail POS
   kitchenPrinter?: string; // For hospitality - which printer to send to
   courseType?: 'starter' | 'main' | 'dessert' | 'beverage'; // For hospitality
@@ -105,9 +106,12 @@ export interface Category {
   icon?: string;
   color?: string; // For visual distinction
   imageUrl?: string; // Category tile image
-  parentId?: string; // For subcategories
+  parentId?: string; // For subcategories - ID of parent category
+  parentPath?: string[]; // Full path of parent IDs for nested categories [grandparent, parent]
+  level?: number; // Category depth: 0=root, 1=first level subcategory, etc.
   order: number;
   active: boolean;
+  productCount?: number; // Cached count of products in this category
   _attachments?: any;
   createdAt: number;
   updatedAt: number;
@@ -221,15 +225,17 @@ export interface User {
   _id: string;
   _rev?: string;
   type: 'user';
-  username: string;
+  tenantId: string; // Multi-tenant: which business/tenant this user belongs to
+  username?: string; // Optional: for username/password login (if implemented)
+  passwordHash?: string; // SHA-256 hash of password for username/password login
   email: string;
   firstName: string;
   lastName: string;
   roleId: string; // Reference to Role
-  role: string; // Deprecated - use roleId
-  permissions: Permission[]; // Override role permissions
-  pin: string; // Required - hashed PIN for POS login (4-6 digits)
-  pinHash?: string; // Deprecated - use pin field which stores hash
+  role?: string; // Deprecated - use roleId
+  permissions?: Permission[]; // Override role permissions
+  pin?: string; // Deprecated - use pinHash
+  pinHash?: string; // SHA-256 hash of PIN for quick POS login (4-6 digits)
   active: boolean;
   allowedTerminals?: string[]; // Specific terminal IDs this user can access
   defaultTerminal?: string;

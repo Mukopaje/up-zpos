@@ -66,6 +66,14 @@ export class DbService {
         index: { fields: ['barcode'] }
       });
 
+      await this.db.createIndex({
+        index: { fields: ['type', 'firstName'] }
+      });
+
+      await this.db.createIndex({
+        index: { fields: ['type', 'name'] }
+      });
+
       console.log('Database indexes created');
     } catch (error) {
       console.error('Error creating indexes:', error);

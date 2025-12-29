@@ -40,6 +40,38 @@
   text-align: center;
 }
 
+.register-link {
+  border-top: 1px solid var(--ion-color-light);
+  padding-top: 20px;
+  margin-top: 20px;
+  
+  p {
+    margin: 0 0 8px 0;
+  }
+}
+
+.business-info {
+  text-align: center;
+  padding: 12px;
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  
+  h3 {
+    margin: 0;
+    font-weight: 600;
+  }
+}
+
+.help-text {
+  padding: 12px;
+  background: var(--ion-color-light);
+  border-radius: 8px;
+  
+  small {
+    line-height: 1.5;
+  }
+}
+
 .version-info {
   margin-top: 2rem;
   text-align: center;
@@ -58,5 +90,12 @@ ion-item {
 
   .logo-section h1 {
     font-size: 4rem;
+  }
+}
+
+@media (max-width: 480px) {
+  ion-item {
+    --inner-padding-top: 8px;
+    --inner-padding-bottom: 8px;
   }
 }

@@ -5,20 +5,26 @@ import { posRedirectGuard } from './core/guards/pos-redirect.guard';
 export const routes: Routes = [
   {
     path: '',
-    redirectTo: 'data-loader',
+    redirectTo: 'login',
     pathMatch: 'full'
   },
   {
     path: 'license-login',
-    loadComponent: () => import('./pages/auth/license-login/license-login.page').then(m => m.LicenseLoginPage)
+    redirectTo: 'login',
+    pathMatch: 'full'
   },
   {
     path: 'pin-login',
-    loadComponent: () => import('./pages/auth/pin-login/pin-login.page').then(m => m.PinLoginPage)
+    redirectTo: 'login',
+    pathMatch: 'full'
   },
   {
     path: 'login',
     loadComponent: () => import('./pages/auth/login/login.page').then(m => m.LoginPage)
+  },
+  {
+    path: 'register',
+    loadComponent: () => import('./pages/auth/register/register.page').then(m => m.RegisterPage)
   },
   {
     path: 'data-loader',
@@ -88,13 +94,18 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
-    path: 'products',
-    loadComponent: () => import('./pages/products/products.page').then(m => m.ProductsPage),
+    path: 'products-management',
+    loadComponent: () => import('./pages/products-management/products-management.page').then(m => m.ProductsManagementPage),
     canActivate: [AuthGuard]
   },
   {
-    path: 'products-management',
-    loadComponent: () => import('./pages/products-management/products-management.page').then(m => m.ProductsManagementPage),
+    path: 'categories',
+    loadComponent: () => import('./pages/categories/categories.page').then(m => m.CategoriesPage),
+    canActivate: [AuthGuard]
+  },
+  {
+    path: 'products',
+    loadComponent: () => import('./pages/products/products.page').then(m => m.ProductsPage),
     canActivate: [AuthGuard]
   },
   {

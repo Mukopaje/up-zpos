@@ -1,16 +1,18 @@
 import { Injectable, inject } from '@angular/core';
-import { DbService } from './db.service';
 import { RolesService } from './roles.service';
 import { TerminalsService } from './terminals.service';
-import { Role, Terminal, User } from '../../models';
+import { UsersService } from './users.service';
+import { StorageService } from './storage.service';
+import { Role, Terminal } from '../../models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class InitDataService {
-  private db = inject(DbService);
   private rolesService = inject(RolesService);
   private terminalsService = inject(TerminalsService);
+  private usersService = inject(UsersService);
+  private storage = inject(StorageService);
 
   async initializeDefaultData(): Promise<void> {
     try {
@@ -51,21 +53,12 @@ export class InitDataService {
   }
 
   private async isInitialized(): Promise<boolean> {
-    try {
-      const result = await this.db.get('init_status');
-      return !!(result && (result as any).initialized);
-    } catch {
-      return false;
-    }
+    const flag = await this.storage.get('data_initialized');
+    return !!flag;
   }
 
   private async markInitialized(): Promise<void> {
-    await this.db.put({
-      _id: 'init_status',
-      type: 'config',
-      initialized: true,
-      timestamp: Date.now()
-    });
+    await this.storage.set('data_initialized', true);
   }
 
   private async initializeTestUser(): Promise<void> {
@@ -80,37 +73,26 @@ export class InitDataService {
       return;
     }
 
-    // Check if user already exists
     try {
-      const existing = await this.db.find({
-        selector: { type: 'user', username: 'admin' }
-      });
-      if (existing && existing.length > 0) {
+      const existing = await this.usersService.getUserByUsername('admin');
+      if (existing) {
         console.log('Test user already exists');
         return;
       }
-    } catch (error) {
-      console.log('No existing test user found, creating...');
-    }
 
-    const testUser: User = {
-      _id: `user_admin_${Date.now()}`,
-      type: 'user',
-      username: 'admin',
-      pin: 'hashed_1234', // Default PIN is 1234
-      firstName: 'System',
-      lastName: 'Administrator',
-      email: 'admin@zpos.com',
-      roleId: adminRole._id,
-      role: 'admin',
-      permissions: [],
-      active: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
+      await this.usersService.createUser({
+        tenantId: 'default-tenant',
+        username: 'admin',
+        email: 'admin@zpos.com',
+        firstName: 'System',
+        lastName: 'Administrator',
+        roleId: adminRole._id,
+        role: 'admin',
+        permissions: [],
+        pin: '1234',
+        active: true
+      });
 
-    try {
-      await this.db.put(testUser);
       console.log('Created test user: admin (PIN: 1234)');
     } catch (error) {
       console.error('Error creating test user:', error);
@@ -119,19 +101,6 @@ export class InitDataService {
 
   private async initializeTestTerminal(): Promise<void> {
     console.log('Creating test terminal...');
-
-    // Check if terminal already exists
-    try {
-      const existing = await this.db.find({
-        selector: { type: 'terminal', name: 'Main Counter' }
-      });
-      if (existing && existing.length > 0) {
-        console.log('Test terminal already exists');
-        return;
-      }
-    } catch (error) {
-      console.log('No existing test terminal found, creating...');
-    }
 
     const testTerminal: Terminal = {
       _id: `terminal_main_${Date.now()}`,
@@ -149,6 +118,15 @@ export class InitDataService {
     };
 
     try {
+      // If a terminal with the same code/name already exists, skip creation
+      await this.terminalsService.loadTerminals();
+      const existing = this.terminalsService.terminals()
+        .find(t => t.name === 'Main Counter' || t.code === 'POS1');
+      if (existing) {
+        console.log('Test terminal already exists');
+        return;
+      }
+
       await this.terminalsService.registerTerminal(testTerminal);
       console.log('Created test terminal: Main Counter');
     } catch (error) {
@@ -164,16 +142,7 @@ export class InitDataService {
     if (!confirm) return;
 
     try {
-      // Delete init status
-      try {
-        const initDoc = await this.db.get('init_status') as any;
-        if (initDoc?._id) {
-          await this.db.delete(initDoc._id);
-        }
-      } catch (error) {
-        console.log('No init status to delete');
-      }
-
+      await this.storage.remove('data_initialized');
       // Reinitialize
       await this.initializeDefaultData();
 
