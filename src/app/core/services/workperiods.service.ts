@@ -1,6 +1,8 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { SqliteService, WorkperiodRow } from './sqlite.service';
 import { AuthService } from './auth.service';
+import { SettingsService } from './settings.service';
+import { SyncService } from './sync.service';
 
 @Injectable({
   providedIn: 'root'
@@ -8,6 +10,8 @@ import { AuthService } from './auth.service';
 export class WorkperiodsService {
   private sqlite = inject(SqliteService);
   private auth = inject(AuthService);
+  private settings = inject(SettingsService);
+  private sync = inject(SyncService);
 
   currentWorkperiod = signal<WorkperiodRow | null>(null);
   recentWorkperiods = signal<WorkperiodRow[]>([]);
@@ -88,6 +92,18 @@ export class WorkperiodsService {
 
     this.currentWorkperiod.set(null);
     await this.refreshRecent();
+
+    // Auto backup/sync at end of workperiod if enabled
+    try {
+      const appSettings = this.settings.settings();
+      const autoBackup = appSettings.autoBackupOnWorkperiodClose ?? true;
+
+      if (autoBackup) {
+        await this.sync.syncToCloud();
+      }
+    } catch (error) {
+      console.error('Auto backup after workperiod close failed:', error);
+    }
   }
 
   async refreshRecent(limit: number = 20): Promise<void> {

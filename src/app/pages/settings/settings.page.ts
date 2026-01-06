@@ -48,7 +48,8 @@ import {
   storefront,
   cartOutline,
   colorPaletteOutline,
-  pricetagOutline
+  pricetagOutline,
+  personCircleOutline
 } from 'ionicons/icons';
 
 import { PrinterSettings, LoyaltyProgram } from '../../models';
@@ -57,6 +58,7 @@ import { StorageService } from '../../core/services/storage.service';
 import { SqliteService } from '../../core/services/sqlite.service';
 import { ProductsService } from '../../core/services/products.service';
 import { LoyaltyServiceClient } from '../../core/services/loyalty.service';
+import { AuthService } from '../../core/services/auth.service';
 
 @Component({
   selector: 'app-settings',
@@ -94,6 +96,7 @@ export class SettingsPage implements OnInit {
   private sqlite = inject(SqliteService);
   private productsService = inject(ProductsService);
   private loyaltyService = inject(LoyaltyServiceClient);
+  authService = inject(AuthService);
 
   printerSettings = signal<PrinterSettings>({
     autoPrint: false,
@@ -115,6 +118,11 @@ export class SettingsPage implements OnInit {
   appSettings = this.settingsService.settings;
 
   loyaltyProgram = signal<LoyaltyProgram | null>(null);
+
+  // Account / license info from onboarding & auth
+  businessName = signal<string | null>(null);
+  licenseKey = signal<string | null>(null);
+  showLicenseKey = signal(false);
 
   tempSettings: any = {
     autoPrint: false,
@@ -162,13 +170,15 @@ export class SettingsPage implements OnInit {
       'storefront': storefront,
       'cart-outline': cartOutline,
       'color-palette-outline': colorPaletteOutline,
-      'pricetag-outline': pricetagOutline
+      'pricetag-outline': pricetagOutline,
+      'person-circle-outline': personCircleOutline
     });
   }
 
   async ngOnInit() {
     await this.loadSettings();
     await this.loadLoyaltyProgram();
+    await this.loadAccountInfo();
   }
 
   private async loadSettings() {
@@ -221,6 +231,80 @@ export class SettingsPage implements OnInit {
     } catch (error) {
       console.error('Error loading loyalty program:', error);
     }
+  }
+
+  private async loadAccountInfo() {
+    try {
+      const name = await this.authService.getBusinessName();
+      const licenseKey = await this.storage.get<string>('licenseKey');
+
+      this.businessName.set(name || null);
+      this.licenseKey.set(licenseKey || null);
+    } catch (error) {
+      console.error('Error loading account info:', error);
+    }
+  }
+
+  async onToggleAutoBackup(event: CustomEvent) {
+    const enabled = !!event.detail.checked;
+    try {
+      await this.settingsService.updateSettings({ autoBackupOnWorkperiodClose: enabled });
+      await this.showToast('Auto backup preference updated');
+    } catch (error) {
+      console.error('Error updating auto backup preference:', error);
+      await this.showToast('Failed to update backup preference');
+    }
+  }
+
+  async onShowLicenseKey() {
+    if (!this.licenseKey()) {
+      return;
+    }
+
+    const alert = await this.alertCtrl.create({
+      header: 'View License Key',
+      message: 'Enter an admin PIN to view the full license key.',
+      inputs: [
+        {
+          name: 'adminPin',
+          type: 'password',
+          placeholder: 'Admin PIN (4-6 digits)',
+          attributes: {
+            inputmode: 'numeric',
+            maxlength: 6
+          }
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Unlock',
+          handler: async (data) => {
+            const pin = (data?.adminPin || '').trim();
+
+            if (!pin || pin.length < 4) {
+              await this.showToast('Please enter a valid admin PIN');
+              return false;
+            }
+
+            const isAdmin = await this.authService.validateAdminPin(pin);
+            if (!isAdmin) {
+              await this.showToast('Invalid admin PIN');
+              return false;
+            }
+
+            this.showLicenseKey.set(true);
+            await this.showToast('License key unlocked');
+            return true;
+          }
+        }
+      ]
+    });
+
+    await alert.present();
   }
 
   openMenu() {
@@ -688,7 +772,7 @@ export class SettingsPage implements OnInit {
   async exportData() {
     const alert = await this.alertCtrl.create({
       header: 'Export Data',
-      message: 'This feature will export all your data to a backup file.',
+      message: 'Export a backup of your local POS data to a file you can save or move to another device.',
       buttons: [
         {
           text: 'Cancel',
@@ -697,7 +781,51 @@ export class SettingsPage implements OnInit {
         {
           text: 'Export',
           handler: async () => {
-            await this.showToast('Export functionality coming soon');
+            const loading = await this.loadingCtrl.create({
+              message: 'Preparing backup...'
+            });
+            await loading.present();
+
+            try {
+              await this.sqlite.ensureInitialized();
+
+              const [products, customers, sales, inventory, voids, workperiods] = await Promise.all([
+                this.sqlite.getProducts(),
+                this.sqlite.getCustomers(),
+                this.sqlite.getSales(10000),
+                this.sqlite.getInventoryRecords(1000),
+                this.sqlite.getVoidRecords(1000),
+                this.sqlite.getRecentWorkperiods(1000)
+              ]);
+
+              const snapshot = {
+                exportedAt: new Date().toISOString(),
+                products,
+                customers,
+                sales,
+                inventory,
+                voids,
+                workperiods
+              };
+
+              const json = JSON.stringify(snapshot, null, 2);
+              const blob = new Blob([json], { type: 'application/json;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `zpos-backup-${new Date().toISOString().slice(0, 10)}.json`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+
+              await this.showToast('Backup exported');
+            } catch (error) {
+              console.error('Backup export failed', error);
+              await this.showToast('Failed to export backup');
+            } finally {
+              await loading.dismiss();
+            }
           }
         }
       ]

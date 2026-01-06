@@ -54,9 +54,8 @@ export class LicenseLoginPage implements OnInit {
   private loadingCtrl = inject(LoadingController);
   private toastCtrl = inject(ToastController);
 
-  // License activation credentials
+  // License activation state
   licenseCode = '';
-  pin = '';
   isLoading = signal(false);
 
   // License recovery state (forgot license code)
@@ -81,31 +80,31 @@ export class LicenseLoginPage implements OnInit {
   }
 
   async onLogin() {
-    if (!this.licenseCode || !this.pin) {
-      this.showToast('Please enter license code and PIN');
+    if (!this.licenseCode) {
+      this.showToast('Please enter your license code');
       return;
     }
 
     const loading = await this.loadingCtrl.create({
-      message: 'Activating license...'
+      message: 'Validating license...'
     });
     await loading.present();
 
     try {
-      const success = await this.authService.activateLicense(this.licenseCode, this.pin);
-      
-      if (success) {
-        await loading.dismiss();
-        await this.showToast('License activated successfully!', 'success');
+      const result = await this.authService.validateLicense(this.licenseCode.trim());
+
+      await loading.dismiss();
+
+      if (result) {
+        await this.showToast('License validated. You can now log in with your PIN.', 'success');
         this.router.navigate(['/pin-login'], { replaceUrl: true });
       } else {
-        await loading.dismiss();
-        this.showToast('Invalid license code or PIN, or license expired');
+        this.showToast('Invalid or expired license key');
       }
     } catch (error) {
       await loading.dismiss();
-      this.showToast('License activation failed. Please check your internet connection.');
-      console.error('License activation error:', error);
+      this.showToast('License validation failed. Please check your internet connection.');
+      console.error('License validation error:', error);
     }
   }
 

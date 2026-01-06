@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { SqliteService, OutboxItem, Product, Customer, Sale } from './sqlite.service';
 import { AuthService } from './auth.service';
 import { ApiService } from './api.service';
+import { SettingsService } from './settings.service';
 
 interface SyncResponse {
   products: Product[];
@@ -20,6 +21,7 @@ export class SyncService {
   private apiService = inject(ApiService);
   private sqliteService = inject(SqliteService);
   private authService = inject(AuthService);
+  private settingsService = inject(SettingsService);
 
   /**
    * Sync offline changes to the cloud
@@ -149,7 +151,10 @@ export class SyncService {
 
           // Update sales (typically append-only)
           for (const sale of response.sales || []) {
-            // Sales are usually not updated, just inserted
+            // For now we only count pulled remote sales; local
+            // sales are created via OrdersService and synced via outbox.
+            // This hook is available if we later upsert remote sales
+            // into SQLite using sqliteService.upsertRemoteSale.
             totalPulled++;
           }
 
@@ -171,6 +176,17 @@ export class SyncService {
 
       // Save cursor for next sync
       this.syncCursor = currentCursor;
+
+      // Prune old, already-synced sales to keep local DB size under control
+      try {
+        const settings = this.settingsService.settings();
+        const retentionDays = settings.transactionRetentionDays ?? 365;
+        if (retentionDays > 0) {
+          await this.sqliteService.pruneOldSales(retentionDays);
+        }
+      } catch (err) {
+        console.error('Error pruning old sales after sync:', err);
+      }
 
       console.log(`Successfully pulled ${totalPulled} updates`);
       return { success: true, pulled: totalPulled };

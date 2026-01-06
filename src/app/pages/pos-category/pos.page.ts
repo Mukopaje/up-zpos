@@ -61,6 +61,8 @@ import { CustomersService } from '../../core/services/customers.service';
 import { OrdersService } from '../../core/services/orders.service';
 import { PrintService } from '../../core/services/print.service';
 import { BarcodeService } from '../../core/services/barcode.service';
+import { SettingsService } from '../../core/services/settings.service';
+import { ReceiptModalComponent } from '../checkout/receipt-modal/receipt-modal.component';
 
 @Component({
   selector: 'app-pos-category',
@@ -112,6 +114,7 @@ export class PosCategoryPage implements OnInit {
   private ordersService = inject(OrdersService);
   private printService = inject(PrintService);
   private barcodeService = inject(BarcodeService);
+  private settingsService = inject(SettingsService);
 
   // State
   products = this.productsService.products;
@@ -528,14 +531,24 @@ export class PosCategoryPage implements OnInit {
 
       await loading.dismiss();
 
-      // Print receipt
-      await this.printReceipt(order);
+      const appSettings = this.settingsService.settings();
+      const autoPrint = appSettings.autoPrintReceipt ?? false;
+      const showReceiptModal = appSettings.showReceiptModalAfterPayment ?? true;
 
-      // Show success and reset
-      await this.showSuccessAlert(order.orderNumber || order.invoice_no || '', this.change());
-
-      // Reset
-      this.resetTransaction();
+      if (autoPrint) {
+        // Auto-print and immediately reset for the next transaction
+        await this.printReceipt(order);
+        this.resetTransaction();
+        await this.showToast('Payment successful. Receipt printed.');
+      } else if (showReceiptModal) {
+        // Show rich receipt modal so user can choose print/email
+        await this.openReceiptModal(order);
+        this.resetTransaction();
+      } else {
+        // Fallback to simple success alert
+        await this.showSuccessAlert(order.orderNumber || order.invoice_no || '', this.change());
+        this.resetTransaction();
+      }
       
     } catch (error) {
       await loading.dismiss();
@@ -572,6 +585,36 @@ export class PosCategoryPage implements OnInit {
     } catch (error) {
       console.error('Print error:', error);
     }
+  }
+
+  private async openReceiptModal(order: any) {
+    const appSettings = this.settingsService.settings();
+    const businessName = appSettings.businessName || 'ZPOS';
+
+    const modal = await this.modalCtrl.create({
+      component: ReceiptModalComponent,
+      componentProps: {
+        order,
+        businessName,
+        initialEmail: order.customer?.email || null,
+        onPrint: async () => {
+          await this.printReceipt(order);
+        },
+        onEmail: async (email?: string) => {
+          if (!email) return;
+          try {
+            await this.ordersService.queueReceiptEmail(order, email, businessName);
+            await this.showToast('Email receipt queued');
+          } catch (err) {
+            console.error('Error queueing email receipt:', err);
+            await this.showToast('Failed to queue email receipt');
+          }
+        }
+      }
+    });
+
+    await modal.present();
+    await modal.onDidDismiss();
   }
 
   async showSuccessAlert(orderNumber: string, change: number) {

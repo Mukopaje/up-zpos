@@ -1145,6 +1145,103 @@ export class SqliteService {
     }
   }
 
+  /**
+   * Upsert a sale that originated from the cloud.
+   * This writes into the local sales table WITHOUT adding
+   * anything to the outbox, so we don't re-sync the same
+   * records back to the server.
+   */
+  async upsertRemoteSale(sale: Sale): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const id = sale.id || this.generateUUID();
+      const existing = await this.getSaleById(id);
+
+      // If we already have this sale and versions are equal or newer, skip
+      if (existing && typeof existing.version === 'number' && typeof sale.version === 'number') {
+        if (existing.version >= sale.version) {
+          return;
+        }
+      }
+
+      const createdAt = sale.created_at || new Date().toISOString();
+      const updatedAt = sale.updated_at || createdAt;
+      const version = sale.version || (existing?.version ?? 1);
+
+      if (!existing) {
+        const insertQuery = `
+          INSERT INTO sales (
+            id, order_number, customer_id, total, subtotal, tax, discount,
+            payment_method, payment_status, items, tenant_id, version,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        const insertParams = [
+          id,
+          sale.order_number,
+          sale.customer_id || null,
+          sale.total,
+          sale.subtotal,
+          sale.tax || 0,
+          sale.discount || 0,
+          sale.payment_method,
+          sale.payment_status,
+          JSON.stringify(sale.items),
+          sale.tenant_id || null,
+          version,
+          createdAt,
+          updatedAt
+        ];
+
+        await this.db.run(insertQuery, insertParams);
+      } else {
+        const updateQuery = `
+          UPDATE sales SET
+            order_number = ?,
+            customer_id = ?,
+            total = ?,
+            subtotal = ?,
+            tax = ?,
+            discount = ?,
+            payment_method = ?,
+            payment_status = ?,
+            items = ?,
+            tenant_id = ?,
+            version = ?,
+            created_at = COALESCE(created_at, ?),
+            updated_at = ?
+          WHERE id = ?
+        `;
+
+        const updateParams = [
+          sale.order_number,
+          sale.customer_id || null,
+          sale.total,
+          sale.subtotal,
+          sale.tax || 0,
+          sale.discount || 0,
+          sale.payment_method,
+          sale.payment_status,
+          JSON.stringify(sale.items),
+          sale.tenant_id || existing.tenant_id || null,
+          version,
+          createdAt,
+          updatedAt,
+          id
+        ];
+
+        await this.db.run(updateQuery, updateParams);
+      }
+    } catch (error) {
+      console.error('Error upserting remote sale:', error);
+      throw error;
+    }
+  }
+
   async getSaleById(id: string): Promise<Sale | null> {
     if (!this.db) {
       throw new Error('Database not initialized');
@@ -1184,6 +1281,41 @@ export class SqliteService {
       return sales;
     } catch (error) {
       console.error('Error getting sales:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Prune old sales records from the local device to save space.
+   * Only deletes records older than the configured retention window
+   * that do NOT have pending outbox entries (i.e. already synced).
+   */
+  async pruneOldSales(retentionDays: number): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    if (!retentionDays || retentionDays <= 0) {
+      return;
+    }
+
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - retentionDays);
+      const cutoffIso = cutoff.toISOString();
+
+      const query = `
+        DELETE FROM sales
+        WHERE created_at < ?
+          AND id NOT IN (
+            SELECT record_id FROM outbox
+            WHERE table_name = 'sales' AND synced = 0
+          )
+      `;
+
+      await this.db.run(query, [cutoffIso]);
+    } catch (error) {
+      console.error('Error pruning old sales:', error);
       throw error;
     }
   }

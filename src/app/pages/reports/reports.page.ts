@@ -6,6 +6,7 @@ import {
   IonToolbar,
   IonTitle,
   IonContent,
+  IonMenu,
   IonSegment,
   IonSegmentButton,
   IonCard,
@@ -13,6 +14,7 @@ import {
   IonCardTitle,
   IonCardContent,
   IonList,
+  IonListHeader,
   IonItem,
   IonLabel,
   IonText,
@@ -26,7 +28,8 @@ import {
   IonSelectOption,
   IonBadge,
   MenuController,
-  ToastController
+  ToastController,
+  ActionSheetController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import { 
@@ -50,6 +53,7 @@ import { SqliteService, VoidRow, WorkperiodRow } from '../../core/services/sqlit
 import { WorkperiodsService } from '../../core/services/workperiods.service';
 import { WaitersService } from '../../core/services/waiters.service';
 import { TablesService } from '../../core/services/tables.service';
+import { PrintService } from '../../core/services/print.service';
 import { Order, Payment } from '../../models';
 
 Chart.register(...registerables);
@@ -140,6 +144,7 @@ interface InventoryVarianceRow {
     IonToolbar,
     IonTitle,
     IonContent,
+    IonMenu,
     IonSegment,
     IonSegmentButton,
     IonCard,
@@ -147,6 +152,7 @@ interface InventoryVarianceRow {
     IonCardTitle,
     IonCardContent,
     IonList,
+    IonListHeader,
     IonItem,
     IonLabel,
     IonText,
@@ -163,6 +169,7 @@ interface InventoryVarianceRow {
 })
 export class ReportsPage implements OnInit {
   private menuCtrl = inject(MenuController);
+  private actionSheetCtrl = inject(ActionSheetController);
   private ordersService = inject(OrdersService);
   public productsService = inject(ProductsService);
   public customersService = inject(CustomersService);
@@ -171,6 +178,7 @@ export class ReportsPage implements OnInit {
   public workperiodsService = inject(WorkperiodsService);
   private waitersService = inject(WaitersService);
   private tablesService = inject(TablesService);
+  private printService = inject(PrintService);
 
   @ViewChild('salesChart') salesChartRef!: ElementRef<HTMLCanvasElement>;
   @ViewChild('productsChart') productsChartRef!: ElementRef<HTMLCanvasElement>;
@@ -178,7 +186,17 @@ export class ReportsPage implements OnInit {
 
   // State
   selectedReport = signal<'sales' | 'inventory' | 'customers' | 'voids' | 'items' | 'payments' | 'workperiods'>('sales');
-  selectedPeriod = signal<'today' | 'week' | 'month' | 'year' | 'custom'>('week');
+  selectedPeriod = signal<
+    'today' |
+    'yesterday' |
+    'thisWeek' |
+    'lastWeek' |
+    'thisMonth' |
+    'lastMonth' |
+    'thisYear' |
+    'lastYear' |
+    'custom'
+  >('thisWeek');
   isLoading = signal<boolean>(false);
   showDateModal = signal<boolean>(false);
   
@@ -330,6 +348,10 @@ export class ReportsPage implements OnInit {
 
   ionViewWillLeave() {
     this.destroyCharts();
+  }
+
+  openReportsMenu() {
+    this.menuCtrl.open('reports-menu');
   }
 
   private getDateString(daysOffset: number): string {
@@ -880,41 +902,109 @@ export class ReportsPage implements OnInit {
     let endDate = new Date();
 
     switch (this.selectedPeriod()) {
-      case 'today':
+      case 'today': {
         startDate = new Date();
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(23, 59, 59, 999);
         break;
-      
-      case 'week':
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 7);
+      }
+
+      case 'yesterday': {
+        const d = new Date();
+        d.setDate(d.getDate() - 1);
+        startDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+        endDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
         break;
-      
-      case 'month':
-        startDate = new Date();
+      }
+
+      case 'thisWeek': {
+        const now = new Date();
+        const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+        const diffToMonday = (day === 0 ? -6 : 1 - day); // treat Monday as first day
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() + diffToMonday);
+        startDate.setHours(0, 0, 0, 0);
+        // end is "now"
+        break;
+      }
+
+      case 'lastWeek': {
+        const now = new Date();
+        const day = now.getDay();
+        const diffToMonday = (day === 0 ? -6 : 1 - day);
+        const thisWeekStart = new Date(now);
+        thisWeekStart.setDate(now.getDate() + diffToMonday);
+        thisWeekStart.setHours(0, 0, 0, 0);
+
+        startDate = new Date(thisWeekStart);
+        startDate.setDate(thisWeekStart.getDate() - 7);
+
+        endDate = new Date(thisWeekStart);
+        endDate.setDate(thisWeekStart.getDate() - 1);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      }
+
+      case 'thisMonth': {
+        const now = new Date();
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        // end is "now"
+        break;
+      }
+
+      case 'lastMonth': {
+        const now = new Date();
+        const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        startDate = new Date(firstOfThisMonth);
         startDate.setMonth(startDate.getMonth() - 1);
+
+        endDate = new Date(firstOfThisMonth);
+        endDate.setMilliseconds(-1); // last millisecond of previous month
         break;
-      
-      case 'year':
-        startDate = new Date();
-        startDate.setFullYear(startDate.getFullYear() - 1);
+      }
+
+      case 'thisYear': {
+        const now = new Date();
+        startDate = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+        // end is "now"
         break;
-      
-      case 'custom':
+      }
+
+      case 'lastYear': {
+        const now = new Date();
+        startDate = new Date(now.getFullYear() - 1, 0, 1, 0, 0, 0, 0);
+        endDate = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+        break;
+      }
+
+      case 'custom': {
         startDate = new Date(this.startDate());
         endDate = new Date(this.endDate());
         break;
-      
-      default:
+      }
+
+      default: {
+        // Fallback to last 7 days
         startDate = new Date();
         startDate.setDate(startDate.getDate() - 7);
+      }
     }
 
     return { startDate, endDate };
   }
 
-  async selectPeriod(period: 'today' | 'week' | 'month' | 'year' | 'custom') {
+  async selectPeriod(
+    period:
+      | 'today'
+      | 'yesterday'
+      | 'thisWeek'
+      | 'lastWeek'
+      | 'thisMonth'
+      | 'lastMonth'
+      | 'thisYear'
+      | 'lastYear'
+      | 'custom'
+  ) {
     this.selectedPeriod.set(period);
     
     if (period === 'custom') {
@@ -929,7 +1019,7 @@ export class ReportsPage implements OnInit {
     await this.loadData();
   }
 
-  selectReport(report: 'sales' | 'inventory' | 'customers' | 'voids' | 'items' | 'payments') {
+  selectReport(report: 'sales' | 'inventory' | 'customers' | 'voids' | 'items' | 'payments' | 'workperiods') {
     this.selectedReport.set(report);
     setTimeout(() => {
       this.renderCharts();
@@ -1097,15 +1187,258 @@ export class ReportsPage implements OnInit {
   }
 
   async exportReport() {
-    try {
-      if (typeof window !== 'undefined' && 'print' in window) {
-        window.print();
-      } else {
-        await this.showToast('Print/export not supported on this device');
+    const sheet = await this.actionSheetCtrl.create({
+      header: 'Report Actions',
+      buttons: [
+        {
+          text: 'Print on Receipt Printer',
+          icon: 'print',
+          handler: () => {
+            this.printCurrentReport();
+          }
+        },
+        {
+          text: 'Export as CSV',
+          icon: 'download',
+          handler: () => {
+            this.exportCurrentReportAsCsv();
+          }
+        },
+        {
+          text: 'Browser Print / PDF',
+          icon: 'print',
+          handler: () => {
+            if (typeof window !== 'undefined' && 'print' in window) {
+              window.print();
+            } else {
+              this.showToast('Browser print not available on this device');
+            }
+          }
+        },
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        }
+      ]
+    });
+
+    await sheet.present();
+  }
+
+  private getPeriodLabel(): string {
+    const { startDate, endDate } = this.getDateRange();
+    const start = startDate.toLocaleString();
+    const end = endDate.toLocaleString();
+    return `${start} → ${end}`;
+  }
+
+  async printCurrentReport() {
+    const periodLabel = this.getPeriodLabel();
+    const subtitleLines = [`Period: ${periodLabel}`];
+    const bodyLines: string[] = [];
+    const report = this.selectedReport();
+
+    switch (report) {
+      case 'sales': {
+        const summary = this.salesSummary();
+        bodyLines.push(`Total Sales: ZMW ${summary.totalSales.toFixed(2)}`);
+        bodyLines.push(`Total Orders: ${summary.totalOrders}`);
+        bodyLines.push(`Average Order: ZMW ${summary.averageOrderValue.toFixed(2)}`);
+        bodyLines.push(`Tax: ZMW ${summary.totalTax.toFixed(2)}   Discount: ZMW ${summary.totalDiscount.toFixed(2)}`);
+        bodyLines.push('');
+
+        const daily = this.dailySales();
+        if (daily.length) {
+          bodyLines.push('By Day:');
+          daily.forEach(d => {
+            bodyLines.push(`${d.date}: ZMW ${d.sales.toFixed(2)} (${d.orders} orders)`);
+          });
+        }
+        break;
       }
+
+      case 'items': {
+        bodyLines.push('Item Sales:');
+        this.itemSales().forEach(row => {
+          bodyLines.push(`${row.name}`);
+          bodyLines.push(`  Qty: ${row.quantity}  Total: ZMW ${row.revenue.toFixed(2)}  Margin: ZMW ${row.margin.toFixed(2)}`);
+        });
+        break;
+      }
+
+      case 'payments': {
+        bodyLines.push('Payment Summary:');
+        this.paymentSummary().forEach(p => {
+          bodyLines.push(`${p.type.toUpperCase()}: ZMW ${p.totalAmount.toFixed(2)} (${p.paymentCount} payments, ${p.orderCount} orders)`);
+        });
+        break;
+      }
+
+      case 'inventory': {
+        const summary = this.inventoryVarianceSummary();
+        bodyLines.push(`Net Qty: ${summary.netQuantity}`);
+        bodyLines.push(`Net Value: ZMW ${summary.netValue.toFixed(2)}`);
+        bodyLines.push('');
+        bodyLines.push('Top Variances:');
+        this.inventoryVariance().forEach(row => {
+          bodyLines.push(`${row.name}: Qty ${row.netQuantity}  Value: ZMW ${row.netValue.toFixed(2)}`);
+        });
+        break;
+      }
+
+      case 'customers': {
+        bodyLines.push(`Outstanding Balance: ZMW ${this.totalOutstanding().toFixed(2)}`);
+        bodyLines.push('Top Customers:');
+        this.topCustomers().forEach(c => {
+          bodyLines.push(`${c.name} (${c.phone || 'no phone'})`);
+          bodyLines.push(`  Orders: ${c.orderCount}  Spent: ZMW ${c.totalSpent.toFixed(2)}`);
+        });
+        break;
+      }
+
+      case 'voids': {
+        const summary = this.voidSummary();
+        bodyLines.push(`Voided Amount: ZMW ${summary.totalAmount.toFixed(2)}`);
+        bodyLines.push(`Voided Qty: ${summary.totalQuantity}`);
+        bodyLines.push(`Void Count: ${summary.count}`);
+        bodyLines.push('By User:');
+        this.voidsByUser().forEach(v => {
+          bodyLines.push(`${v.createdBy}: ZMW ${v.totalAmount.toFixed(2)} (${v.count} voids)`);
+        });
+        break;
+      }
+
+      case 'workperiods': {
+        const wp = this.getSelectedWorkperiod();
+        if (!wp) {
+          await this.showToast('No workperiod selected');
+          return;
+        }
+        const sales = this.workperiodSalesSummary();
+        bodyLines.push(`Workperiod: ${wp.name || wp.id}`);
+        bodyLines.push(`Status: ${wp.status}`);
+        bodyLines.push(`Start: ${wp.start_time}` + (wp.end_time ? `  End: ${wp.end_time}` : ''));
+        bodyLines.push('');
+        bodyLines.push(`Total Sales: ZMW ${sales.totalSales.toFixed(2)}`);
+        bodyLines.push(`Orders: ${sales.totalOrders}  Avg Order: ZMW ${sales.averageOrderValue.toFixed(2)}`);
+        bodyLines.push('');
+        bodyLines.push('Payments:');
+        this.workperiodPaymentSummary().forEach(p => {
+          bodyLines.push(`  ${p.type.toUpperCase()}: ZMW ${p.totalAmount.toFixed(2)} (${p.paymentCount} payments)`);
+        });
+        break;
+      }
+    }
+
+    if (bodyLines.length === 0) {
+      await this.showToast('Nothing to print for this report');
+      return;
+    }
+
+    const ok = await this.printService.printTextReport({
+      title: `Report: ${this.selectedReport().toUpperCase()}`,
+      subtitleLines,
+      bodyLines
+    });
+
+    if (!ok) {
+      await this.showToast('Failed to print report');
+    }
+  }
+
+  private exportCurrentReportAsCsv() {
+    const report = this.selectedReport();
+    const { startDate, endDate } = this.getDateRange();
+    const startIso = startDate.toISOString().slice(0, 10);
+    const endIso = endDate.toISOString().slice(0, 10);
+    const filenameBase = `${report}-report-${startIso}-to-${endIso}`;
+
+    let csv = '';
+
+    switch (report) {
+      case 'sales': {
+        csv += 'Date,Sales,Orders\n';
+        this.dailySales().forEach(d => {
+          csv += `${d.date},${d.sales.toFixed(2)},${d.orders}\n`;
+        });
+        break;
+      }
+
+      case 'items': {
+        csv += 'Product,Quantity,Revenue,Average Price,Margin\n';
+        this.itemSales().forEach(row => {
+          csv += `"${row.name.replace('"', '""')}",${row.quantity},${row.revenue.toFixed(2)},${row.avgPrice.toFixed(2)},${row.margin.toFixed(2)}\n`;
+        });
+        break;
+      }
+
+      case 'payments': {
+        csv += 'Type,Total Amount,Payment Count,Order Count\n';
+        this.paymentSummary().forEach(p => {
+          csv += `${p.type},${p.totalAmount.toFixed(2)},${p.paymentCount},${p.orderCount}\n`;
+        });
+        break;
+      }
+
+      case 'inventory': {
+        csv += 'Product,Net Quantity,Net Value\n';
+        this.inventoryVariance().forEach(row => {
+          csv += `"${row.name.replace('"', '""')}",${row.netQuantity},${row.netValue.toFixed(2)}\n`;
+        });
+        break;
+      }
+
+      case 'customers': {
+        csv += 'Customer,Phone,Total Spent,Order Count\n';
+        this.topCustomers().forEach(c => {
+          csv += `"${c.name.replace('"', '""')}","${(c.phone || '').replace('"', '""')}",${c.totalSpent.toFixed(2)},${c.orderCount}\n`;
+        });
+        break;
+      }
+
+      case 'voids': {
+        csv += 'User,Void Count,Total Amount\n';
+        this.voidsByUser().forEach(v => {
+          csv += `"${v.createdBy.replace('"', '""')}",${v.count},${v.totalAmount.toFixed(2)}\n`;
+        });
+        break;
+      }
+
+      case 'workperiods': {
+        const wp = this.getSelectedWorkperiod();
+        if (!wp) {
+          this.showToast('No workperiod selected');
+          return;
+        }
+        csv += 'Workperiod,Status,Start,End,Total Sales,Total Orders,Average Order\n';
+        const sales = this.workperiodSalesSummary();
+        csv += `"${(wp.name || wp.id || '').replace('"', '""')}",${wp.status},${wp.start_time || ''},${wp.end_time || ''},${sales.totalSales.toFixed(2)},${sales.totalOrders},${sales.averageOrderValue.toFixed(2)}\n`;
+        break;
+      }
+    }
+
+    if (!csv) {
+      this.showToast('Nothing to export for this report');
+      return;
+    }
+
+    this.downloadCsv(`${filenameBase}.csv`, csv);
+  }
+
+  private downloadCsv(filename: string, csv: string) {
+    try {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error printing report:', error);
-      await this.showToast('Error printing report');
+      console.error('CSV download failed', error);
+      this.showToast('CSV export failed');
     }
   }
 

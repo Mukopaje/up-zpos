@@ -86,6 +86,7 @@ import { TablesService } from '../../core/services/tables.service';
 import { AuthService } from '../../core/services/auth.service';
 import { SqliteService } from '../../core/services/sqlite.service';
 import { CustomerSelectModalComponent } from '../checkout/customer-select-modal/customer-select-modal.component';
+import { ReceiptModalComponent } from '../checkout/receipt-modal/receipt-modal.component';
 
 interface CommandButton {
   id: string;
@@ -1571,14 +1572,24 @@ export class PosCategoryPage implements OnInit {
 
       await loading.dismiss();
 
-      // Print receipt
-      await this.printReceipt(order);
+      const appSettings = this.settingsService.settings();
+      const autoPrint = appSettings.autoPrintReceipt ?? false;
+      const showReceiptModal = appSettings.showReceiptModalAfterPayment ?? true;
 
-      // Show success and reset
-      await this.showSuccessAlert(order.orderNumber || order.invoice_no || '', this.change());
-
-      // Reset
-      this.resetTransaction();
+      if (autoPrint) {
+        // Auto-print and immediately reset for the next ticket
+        await this.printReceipt(order);
+        this.resetTransaction();
+        await this.showToast('Payment successful. Receipt printed.');
+      } else if (showReceiptModal) {
+        // Show rich receipt modal so user can choose print/email
+        await this.openReceiptModal(order);
+        this.resetTransaction();
+      } else {
+        // Fallback to simple success alert
+        await this.showSuccessAlert(order.orderNumber || order.invoice_no || '', this.change());
+        this.resetTransaction();
+      }
       
     } catch (error) {
       await loading.dismiss();
@@ -1615,6 +1626,36 @@ export class PosCategoryPage implements OnInit {
     } catch (error) {
       console.error('Print error:', error);
     }
+  }
+
+  private async openReceiptModal(order: any) {
+    const appSettings = this.settingsService.settings();
+    const businessName = appSettings.businessName || 'ZPOS';
+
+    const modal = await this.modalCtrl.create({
+      component: ReceiptModalComponent,
+      componentProps: {
+        order,
+        businessName,
+        initialEmail: order.customer?.email || null,
+        onPrint: async () => {
+          await this.printReceipt(order);
+        },
+        onEmail: async (email?: string) => {
+          if (!email) return;
+          try {
+            await this.ordersService.queueReceiptEmail(order, email, businessName);
+            await this.showToast('Email receipt queued');
+          } catch (err) {
+            console.error('Error queueing email receipt:', err);
+            await this.showToast('Failed to queue email receipt');
+          }
+        }
+      }
+    });
+
+    await modal.present();
+    await modal.onDidDismiss();
   }
 
   async showSuccessAlert(orderNumber: string, change: number) {

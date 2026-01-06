@@ -6,6 +6,8 @@ ion-list {
     font-weight: 600;
     text-transform: uppercase;
     color: var(--ion-color-primary);
+    background: var(--ion-color-light-tint);
+    border-bottom: 1px solid var(--ion-color-light);
     padding-top: 16px;
     padding-bottom: 8px;
   }

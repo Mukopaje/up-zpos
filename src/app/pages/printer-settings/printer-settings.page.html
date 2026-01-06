@@ -297,6 +297,16 @@
             Print Logo
           </ion-toggle>
         </ion-item>
+
+        <ion-item>
+          <ion-label position="stacked">Extra Bottom Space (lines)</ion-label>
+          <ion-input
+            type="number"
+            min="0"
+            [value]="settings().extraBottomFeedLines ?? 0"
+            (ionInput)="onExtraBottomLinesChange($event)">
+          </ion-input>
+        </ion-item>
       </ion-list>
     </ion-card-content>
   </ion-card>

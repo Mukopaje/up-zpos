@@ -22,7 +22,7 @@
       <ion-icon name="business-outline" slot="start"></ion-icon>
       <ion-label>
         <h2>Business Name</h2>
-        <p>{{ printerSettings().businessInfo.name || 'Not set' }}</p>
+        <p>{{ printerSettings().businessInfo.name || businessName() || 'Not set' }}</p>
       </ion-label>
     </ion-item>
 
@@ -71,6 +71,56 @@
       <ion-label>
         <h2>Tax Number (TPIN)</h2>
         <p>{{ printerSettings().businessInfo.taxNumber || 'Not set' }}</p>
+      </ion-label>
+    </ion-item>
+  </ion-list>
+
+  <!-- Account Information -->
+  <ion-list>
+    <ion-list-header>
+      <ion-label>Account Information</ion-label>
+    </ion-list-header>
+
+    <ion-item>
+      <ion-icon name="person-circle-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>Logged in User</h2>
+        <p>{{ authService.currentUser()?.firstName }} {{ authService.currentUser()?.lastName }}</p>
+      </ion-label>
+    </ion-item>
+
+    <ion-item>
+      <ion-icon name="mail-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>User Email</h2>
+        <p>{{ authService.currentUser()?.email || 'Not set' }}</p>
+      </ion-label>
+    </ion-item>
+
+    <ion-item>
+      <ion-icon name="information-circle-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>User Role</h2>
+        <p>{{ authService.getUserRole() }}</p>
+      </ion-label>
+    </ion-item>
+
+    <ion-item *ngIf="businessName()">
+      <ion-icon name="business-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>Registered Business</h2>
+        <p>{{ businessName() }}</p>
+      </ion-label>
+    </ion-item>
+
+    <ion-item *ngIf="licenseKey()" button (click)="onShowLicenseKey()">
+      <ion-icon name="document-text-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>License Key</h2>
+        <p>
+          {{ showLicenseKey() ? licenseKey() : '••••••••••••••••' }}
+        </p>
+        <small *ngIf="!showLicenseKey()">Tap to view (admin PIN required)</small>
       </ion-label>
     </ion-item>
   </ion-list>
@@ -276,6 +326,19 @@
     <ion-list-header>
       <ion-label>Data Management</ion-label>
     </ion-list-header>
+
+    <ion-item>
+      <ion-icon name="download-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>Auto Backup on Workperiod Close</h2>
+        <p>Automatically sync sales at the end of each workperiod</p>
+      </ion-label>
+      <ion-toggle
+        slot="end"
+        [checked]="settingsService.settings().autoBackupOnWorkperiodClose ?? true"
+        (ionChange)="onToggleAutoBackup($event)"
+      ></ion-toggle>
+    </ion-item>
 
     <ion-item button (click)="exportData()">
       <ion-icon name="download-outline" slot="start" color="primary"></ion-icon>

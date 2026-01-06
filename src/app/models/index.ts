@@ -529,6 +529,12 @@ export interface PrinterSettings {
   fontSize: 'small' | 'normal' | 'large';
   autoCut: boolean; // Auto-cut paper after print
   printLogo: boolean; // Print business logo
+  /**
+   * Extra blank lines to feed at the bottom of receipts/reports
+   * after the standard feed. Helps ensure paper fully exits
+   * especially on small Bluetooth printers without cutters.
+   */
+  extraBottomFeedLines?: number;
   businessInfo: {
     name: string;
     address?: string;

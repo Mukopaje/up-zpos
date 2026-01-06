@@ -1,3 +1,22 @@
+.reports-header {
+  ion-toolbar {
+    --background: var(--ion-color-primary);
+    --color: var(--ion-color-primary-contrast);
+  }
+
+  .reports-nav-toolbar {
+    border-top: 1px solid var(--ion-color-primary-shade);
+  }
+
+  ion-segment {
+    --background: transparent;
+    --color: var(--ion-color-primary-contrast);
+    --color-checked: var(--ion-color-primary-contrast);
+    --indicator-color: var(--ion-color-light);
+    --indicator-box-shadow: none;
+  }
+}
+
 .reports-container {
   padding: 16px;
   max-width: 1200px;

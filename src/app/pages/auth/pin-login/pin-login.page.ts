@@ -23,6 +23,8 @@ import { addIcons } from 'ionicons';
 import { backspaceOutline, logOutOutline } from 'ionicons/icons';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { SyncService } from '../../../core/services/sync.service';
+import { SqliteService } from '../../../core/services/sqlite.service';
 
 @Component({
   selector: 'app-pin-login',
@@ -52,6 +54,8 @@ export class PinLoginPage implements OnInit {
   private router = inject(Router);
   private toastCtrl = inject(ToastController);
   private alertCtrl = inject(AlertController);
+  private syncService = inject(SyncService);
+  private sqlite = inject(SqliteService);
 
   pin = signal('');
   displayPin = signal('');
@@ -136,19 +140,79 @@ export class PinLoginPage implements OnInit {
 
   async onLogoutLicense() {
     const alert = await this.alertCtrl.create({
-      header: 'Logout License',
-      message: 'This will deactivate the POS license on this device. You will need to login again with your email and password. Continue?',
+      header: 'Deactivate License',
+      message:
+        'This will attempt to sync any unsent sales, then clear all local POS data and remove this license from the device so a different business can activate it. You must enter an ADMIN PIN and be online for this to continue.',
+      inputs: [
+        {
+          name: 'adminPin',
+          type: 'password',
+          placeholder: 'Admin PIN (4-6 digits)',
+          attributes: {
+            inputmode: 'numeric',
+            maxlength: 6
+          }
+        }
+      ],
       buttons: [
         {
           text: 'Cancel',
           role: 'cancel'
         },
         {
-          text: 'Logout',
+          text: 'Deactivate',
           role: 'destructive',
-          handler: async () => {
-            await this.authService.logoutLicense();
-            this.router.navigate(['/license-login'], { replaceUrl: true });
+          handler: async (data) => {
+            const pin = (data?.adminPin || '').trim();
+
+            if (!pin || pin.length < 4) {
+              await this.showToast('Please enter a valid admin PIN');
+              return false;
+            }
+
+            // Check for unsynced data and try to sync before deactivation
+            try {
+              await this.sqlite.ensureInitialized();
+              const unsynced = await this.sqlite.getUnsyncedOutboxItems();
+
+              if (unsynced.length > 0) {
+                const syncResult = await this.syncService.syncToCloud();
+
+                if (!syncResult.success) {
+                  await this.showToast(
+                    'Cannot deactivate license while there is unsynced data. Please connect to the internet and try again.'
+                  );
+                  return false;
+                }
+              }
+            } catch (error) {
+              console.error('Error checking/syncing data before license deactivation:', error);
+              await this.showToast('Unable to verify sync status. Please try again.');
+              return false;
+            }
+
+            // Validate admin PIN against backend
+            const isAdmin = await this.authService.validateAdminPin(pin);
+            if (!isAdmin) {
+              await this.showToast('Invalid admin PIN. License was not changed.');
+              return false;
+            }
+
+            // Deactivate license and clear local data
+            try {
+              await this.authService.deactivateLicense();
+              await this.showToast(
+                'License deactivated. You can now activate this device for a different business.',
+                'success'
+              );
+              this.router.navigate(['/license-login'], { replaceUrl: true });
+            } catch (error) {
+              console.error('Error deactivating license:', error);
+              await this.showToast('Failed to deactivate license. Please try again.');
+              return false;
+            }
+
+            return true;
           }
         }
       ]

@@ -32,6 +32,10 @@ export interface AppSettings {
   productTileBackgroundColor?: string;
   // Post-payment UX
   showReceiptModalAfterPayment?: boolean;
+  // Data safety
+  autoBackupOnWorkperiodClose?: boolean;
+  // How long to keep full transactional data locally (in days)
+  transactionRetentionDays?: number;
 }
 
 @Injectable({
@@ -58,7 +62,7 @@ export class SettingsService {
     currency: 'ZMW',
     taxRate: 16,
     receiptHeader: 'Thank you for your purchase!',
-    receiptFooter: 'Please visit again!',
+    receiptFooter: 'Thank you! Call again.',
     autoPrintReceipt: false,
     showLogoOnReceipt: true,
     printerEnabled: true,
@@ -66,7 +70,9 @@ export class SettingsService {
     theme: 'auto',
     categoryTileBackgroundColor: '#FF9800',
     productTileBackgroundColor: '#4CAF50',
-    showReceiptModalAfterPayment: true
+    showReceiptModalAfterPayment: true,
+    autoBackupOnWorkperiodClose: true,
+    transactionRetentionDays: 365
   });
 
   // Public signals

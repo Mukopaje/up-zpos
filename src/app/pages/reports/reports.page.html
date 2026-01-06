@@ -1,62 +1,88 @@
-<ion-header [translucent]="true">
+<ion-menu menuId="reports-menu" contentId="reports-content" side="start" type="overlay">
+  <ion-header>
+    <ion-toolbar color="primary">
+      <ion-title>Reports</ion-title>
+    </ion-toolbar>
+  </ion-header>
+  <ion-content>
+    <ion-list>
+      <ion-list-header>
+        <ion-label>Report Types</ion-label>
+      </ion-list-header>
+      <ion-item button detail="false" (click)="selectReport('sales')" menuClose>
+        <ion-icon name="trending-up" slot="start"></ion-icon>
+        <ion-label>Sales Summary</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="selectReport('items')" menuClose>
+        <ion-icon name="cart" slot="start"></ion-icon>
+        <ion-label>Item Sales</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="selectReport('payments')" menuClose>
+        <ion-icon name="cash" slot="start"></ion-icon>
+        <ion-label>Payments</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="selectReport('inventory')" menuClose>
+        <ion-icon name="cube" slot="start"></ion-icon>
+        <ion-label>Inventory</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="selectReport('customers')" menuClose>
+        <ion-icon name="people" slot="start"></ion-icon>
+        <ion-label>Customers</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="selectReport('voids')" menuClose>
+        <ion-icon name="close-circle" slot="start"></ion-icon>
+        <ion-label>Voids</ion-label>
+      </ion-item>
+      <ion-item button detail="false" (click)="selectReport('workperiods')" menuClose>
+        <ion-icon name="analytics" slot="start"></ion-icon>
+        <ion-label>Workperiods</ion-label>
+      </ion-item>
+    </ion-list>
+  </ion-content>
+</ion-menu>
+
+<ion-header class="reports-header" [translucent]="true">
   <ion-toolbar color="primary">
     <ion-button slot="start" fill="clear" (click)="openMenu()">
       <ion-icon name="menu"></ion-icon>
     </ion-button>
     <ion-title>Reports & Analytics</ion-title>
-    <ion-button slot="end" fill="clear" (click)="exportReport()">
-      <ion-icon name="download"></ion-icon>
-    </ion-button>
-  </ion-toolbar>
-
-  <!-- Report Type Selector -->
-  <ion-toolbar>
-    <ion-segment [value]="selectedReport()" (ionChange)="selectReport($any($event.detail.value))">
-      <ion-segment-button value="sales">
-        <ion-icon name="trending-up"></ion-icon>
-        <ion-label>Sales</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="items">
-        <ion-icon name="cart"></ion-icon>
-        <ion-label>Items</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="payments">
-        <ion-icon name="cash"></ion-icon>
-        <ion-label>Payments</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="inventory">
-        <ion-icon name="cube"></ion-icon>
-        <ion-label>Inventory</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="customers">
-        <ion-icon name="people"></ion-icon>
-        <ion-label>Customers</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="voids">
-        <ion-icon name="close-circle"></ion-icon>
-        <ion-label>Voids</ion-label>
-      </ion-segment-button>
-      <ion-segment-button value="workperiods">
-        <ion-icon name="analytics"></ion-icon>
-        <ion-label>Workperiods</ion-label>
-      </ion-segment-button>
-    </ion-segment>
+    <ion-buttons slot="end">
+      <ion-button fill="clear" (click)="openReportsMenu()">
+        <ion-icon name="list-outline"></ion-icon>
+      </ion-button>
+      <ion-button fill="clear" (click)="exportReport()">
+        <ion-icon name="download"></ion-icon>
+      </ion-button>
+    </ion-buttons>
   </ion-toolbar>
 
   <!-- Period Filter -->
-  <ion-toolbar>
+  <ion-toolbar class="reports-nav-toolbar">
     <ion-segment [value]="selectedPeriod()" (ionChange)="selectPeriod($any($event.detail.value))" scrollable>
       <ion-segment-button value="today">
         <ion-label>Today</ion-label>
       </ion-segment-button>
-      <ion-segment-button value="week">
-        <ion-label>Week</ion-label>
+      <ion-segment-button value="yesterday">
+        <ion-label>Yesterday</ion-label>
       </ion-segment-button>
-      <ion-segment-button value="month">
-        <ion-label>Month</ion-label>
+      <ion-segment-button value="thisWeek">
+        <ion-label>This Week</ion-label>
       </ion-segment-button>
-      <ion-segment-button value="year">
-        <ion-label>Year</ion-label>
+      <ion-segment-button value="lastWeek">
+        <ion-label>Last Week</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="thisMonth">
+        <ion-label>This Month</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="lastMonth">
+        <ion-label>Last Month</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="thisYear">
+        <ion-label>This Year</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="lastYear">
+        <ion-label>Last Year</ion-label>
       </ion-segment-button>
       <ion-segment-button value="custom">
         <ion-icon name="calendar"></ion-icon>
@@ -65,7 +91,7 @@
   </ion-toolbar>
 
   <!-- Standard Filters -->
-  <ion-toolbar>
+  <ion-toolbar class="reports-nav-toolbar">
     <ion-segment [value]="paymentFilter()" (ionChange)="paymentFilter.set($any($event.detail.value))" scrollable>
       <ion-segment-button value="all">
         <ion-label>All Payments</ion-label>
@@ -86,7 +112,7 @@
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true">
+<ion-content [fullscreen]="true" id="reports-content">
   @if (isLoading()) {
     <div class="loading-state">
       <ion-spinner name="crescent" color="primary"></ion-spinner>
@@ -97,6 +123,11 @@
     <!-- Sales Report -->
     @if (selectedReport() === 'sales') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
         
         <!-- Summary Cards -->
         <div class="summary-grid">
@@ -200,6 +231,11 @@
     <!-- Inventory Report -->
     @if (selectedReport() === 'inventory') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
         
         <!-- Inventory Summary -->
         <div class="summary-grid">
@@ -347,6 +383,11 @@
     <!-- Item Sales Report -->
     @if (selectedReport() === 'items') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
 
         <ion-card>
           <ion-card-header>
@@ -391,6 +432,11 @@
     <!-- Payments Report -->
     @if (selectedReport() === 'payments') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
 
         <ion-card>
           <ion-card-header>
@@ -427,6 +473,11 @@
     <!-- Customer Report -->
     @if (selectedReport() === 'customers') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
         
         <!-- Customer Summary -->
         <div class="summary-grid">
@@ -540,6 +591,11 @@
     <!-- Workperiod Report -->
     @if (selectedReport() === 'workperiods') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
 
         <!-- Current / Selected Workperiod Summary -->
         <ion-card>
@@ -815,6 +871,11 @@
     <!-- Void Report -->
     @if (selectedReport() === 'voids') {
       <div class="reports-container">
+        <div class="report-actions">
+          <ion-button fill="clear" size="small" (click)="printCurrentReport()">
+            <ion-icon name="print-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
 
         <!-- Void Summary -->
         <div class="summary-grid">

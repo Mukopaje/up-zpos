@@ -26,7 +26,7 @@
 
           <ion-card-content>
             <ion-text color="medium" class="ion-margin-bottom">
-              <p>Enter your license code and PIN to link this device to your account.</p>
+              <p>Enter your license code to link this device to your account.</p>
             </ion-text>
 
             <form (ngSubmit)="onLogin()" class="login-form">
@@ -42,24 +42,12 @@
                 ></ion-input>
               </ion-item>
 
-              <ion-item>
-                <ion-label position="stacked">PIN</ion-label>
-                <ion-input
-                  type="password"
-                  [(ngModel)]="pin"
-                  name="pin"
-                  required
-                  autocomplete="off"
-                  placeholder="Enter your activation PIN"
-                ></ion-input>
-              </ion-item>
-
               <ion-button
                 expand="block"
                 type="submit"
                 color="primary"
                 class="ion-margin-top primary-action"
-                [disabled]="!licenseCode || !pin"
+                [disabled]="!licenseCode"
               >
                 Activate License
               </ion-button>
@@ -67,7 +55,7 @@
 
             <div class="help-text ion-margin-top">
               <ion-text color="medium">
-                <small>Use the license code and PIN provided to the business owner. After activation, staff will log in using their PINs.</small>
+                <small>Use the license code provided to the business owner. After activation, staff will log in using their PINs.</small>
               </ion-text>
             </div>
 

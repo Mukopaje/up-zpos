@@ -470,6 +470,12 @@ export class PrinterSettingsPage implements OnInit {
     });
   }
 
+  onExtraBottomLinesChange(event: any) {
+    const raw = Number(event.detail.value);
+    const value = isNaN(raw) ? 0 : Math.max(0, raw);
+    this.updateSetting('extraBottomFeedLines', value);
+  }
+
   /**
    * Update business info
    */

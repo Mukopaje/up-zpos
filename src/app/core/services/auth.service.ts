@@ -6,6 +6,7 @@ import { StorageService } from './storage.service';
 import { RolesService } from './roles.service';
 import { TerminalsService } from './terminals.service';
 import { UsersService } from './users.service';
+import { SqliteService } from './sqlite.service';
 import { User, Role, Terminal, BusinessLicense } from '../../models';
 import { environment } from '../../../environments/environment';
 
@@ -69,6 +70,7 @@ export class AuthService {
   private rolesService = inject(RolesService);
   private terminalsService = inject(TerminalsService);
   private usersService = inject(UsersService);
+  private sqlite = inject(SqliteService);
   
   private readonly API_URL = environment.apiUrl;
 
@@ -218,6 +220,38 @@ export class AuthService {
   }
 
   /**
+   * Validate that the provided PIN belongs to an admin user
+   * for the current tenant. Used for sensitive operations
+   * like license deactivation and viewing license details.
+   */
+  async validateAdminPin(pin: string): Promise<boolean> {
+    const tenantId = await this.storage.get<string>('tenantId');
+    if (!tenantId) {
+      console.error('No tenant context when validating admin PIN');
+      return false;
+    }
+
+    try {
+      const response = await firstValueFrom(
+        this.http.post<LoginResponse>(`${this.API_URL}/auth/validate-pin`, {
+          tenantId,
+          pin
+        })
+      );
+
+      if (response && response.user && response.user.role === 'admin') {
+        return true;
+      }
+
+      console.warn('PIN is valid but user is not an admin');
+      return false;
+    } catch (error) {
+      console.error('Admin PIN validation failed:', error);
+      return false;
+    }
+  }
+
+  /**
    * Validate license key and get tenant information
    * Step 1 of multi-tenant authentication
    */
@@ -237,6 +271,53 @@ export class AuthService {
     } catch (error) {
       console.error('License validation error:', error);
       return null;
+    }
+  }
+
+  /**
+   * Fully deactivate the current license on this device.
+   * Clears tenant context, local POS data and auth state so
+   * a different business can activate this device.
+   */
+  async deactivateLicense(): Promise<void> {
+    try {
+      // Clear all local POS data for current tenant
+      try {
+        await this.sqlite.ensureInitialized();
+        await this.sqlite.clearAllData();
+      } catch (error) {
+        console.error('Error clearing local data during license deactivation:', error);
+      }
+
+      // Clear tenant / license context and auth tokens
+      await this.storage.remove('tenantId');
+      await this.storage.remove('businessName');
+      await this.storage.remove('licenseKey');
+      await this.storage.remove('userId');
+      await this.storage.remove('token');
+      await this.storage.remove('expires');
+      await this.storage.remove('terminalId');
+
+      // Also clear app/printer settings so new business starts clean
+      await this.storage.remove('app-settings');
+      await this.storage.remove('printer-settings');
+
+      // Reset in-memory auth and license state
+      this.authState.set({
+        user: null,
+        role: null,
+        terminal: null,
+        token: null,
+        expires: null
+      });
+
+      this.licenseState.set({
+        license: null,
+        isActivated: false
+      });
+    } catch (error) {
+      console.error('Error deactivating license:', error);
+      throw error;
     }
   }
 

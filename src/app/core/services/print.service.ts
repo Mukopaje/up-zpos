@@ -28,6 +28,7 @@ export class PrintService {
     printLogo: false,
     paperWidth: 58,
     fontSize: 'normal',
+    extraBottomFeedLines: 0,
     businessInfo: {
       name: 'POS System',
       address: '',
@@ -36,7 +37,8 @@ export class PrintService {
       taxNumber: '',
       taxId: ''
     },
-    receiptFooter: 'Thank you for your business!'
+    // Default footer message for receipts
+    receiptFooter: 'Thank you! Call again.'
   });
 
   isPrinting = signal<boolean>(false);
@@ -185,7 +187,13 @@ export class PrintService {
       }
 
       if (settings) {
-        this.printerSettings.set(settings);
+        // Ensure new fields have sensible defaults when loading older configs
+        const merged: PrinterSettings = {
+          ...this.printerSettings(),
+          ...settings,
+          extraBottomFeedLines: settings.extraBottomFeedLines ?? 0
+        };
+        this.printerSettings.set(merged);
       }
 
       if (printersList && printersList.length > 0) {
@@ -488,9 +496,17 @@ export class PrintService {
    */
   private buildReceipt(data: ReceiptData): string {
     const settings = this.printerSettings();
+    const appSettings = this.settings.settings();
     const width = this.getLineWidth();
     const cmd = ESC_POS_COMMANDS;
     let receipt = '';
+
+    // Resolve receipt identity details with fallback to business settings
+    const name = settings.businessInfo.name || appSettings.businessName || 'ZPOS';
+    const address = settings.businessInfo.address || appSettings.address || '';
+    const email = settings.businessInfo.email || appSettings.email || '';
+    const phone = settings.businessInfo.phone || appSettings.phone || '';
+    const taxId = settings.businessInfo.taxId || settings.businessInfo.taxNumber || '';
 
     // Initialize printer
     receipt += cmd.HARDWARE.HW_INIT;
@@ -498,32 +514,32 @@ export class PrintService {
     // Business name (centered, large)
     receipt += cmd.TEXT_FORMAT.TXT_4SQUARE;
     receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
-    if (settings.businessInfo.name) {
-      const nameLines = PrinterCommands.wrapText(settings.businessInfo.name, 16);
+    if (name) {
+      const nameLines = PrinterCommands.wrapText(name, 16);
       receipt += nameLines.join(cmd.EOL).toUpperCase();
       receipt += cmd.EOL;
     }
 
     // Business details (centered, normal)
     receipt += cmd.TEXT_FORMAT.TXT_NORMAL;
-    if (settings.businessInfo.address) {
-      const addressLines = PrinterCommands.wrapText(settings.businessInfo.address, 24);
+    if (address) {
+      const addressLines = PrinterCommands.wrapText(address, 24);
       receipt += addressLines.join(cmd.EOL);
       receipt += cmd.EOL;
     }
 
-    if (settings.businessInfo.taxId) {
-      receipt += 'TPIN: ' + settings.businessInfo.taxId;
+    if (taxId) {
+      receipt += 'TPIN: ' + taxId;
       receipt += cmd.EOL;
     }
 
-    if (settings.businessInfo.email) {
-      receipt += settings.businessInfo.email;
+    if (email) {
+      receipt += email;
       receipt += cmd.EOL;
     }
 
-    if (settings.businessInfo.phone) {
-      receipt += settings.businessInfo.phone;
+    if (phone) {
+      receipt += phone;
       receipt += cmd.EOL;
     }
 
@@ -547,7 +563,12 @@ export class PrintService {
 
     receipt += cmd.EOL;
 
-    // Separator line
+    // Separator line before items
+    receipt += PrinterCommands.horizontalLine(width);
+    receipt += cmd.EOL;
+    receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+    receipt += 'ITEMS';
+    receipt += cmd.EOL;
     receipt += PrinterCommands.horizontalLine(width);
 
     // Items section (left aligned)
@@ -566,7 +587,12 @@ export class PrintService {
       receipt += cmd.EOL;
     }
 
-    // Separator
+    // Separator and header for totals section
+    receipt += PrinterCommands.horizontalLine(width);
+    receipt += cmd.EOL;
+    receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+    receipt += 'TOTALS';
+    receipt += cmd.EOL;
     receipt += PrinterCommands.horizontalLine(width);
 
     // Totals section (right aligned)
@@ -597,6 +623,12 @@ export class PrintService {
     // Payments
     if (data.payments && data.payments.length > 0) {
       receipt += cmd.EOL;
+      receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+      receipt += 'PAYMENTS';
+      receipt += cmd.EOL;
+      receipt += PrinterCommands.horizontalLine(width);
+      receipt += cmd.EOL;
+      receipt += cmd.TEXT_FORMAT.TXT_ALIGN_RT;
       data.payments.forEach(payment => {
         const method = payment.paymentOption || payment.type || 'Payment';
         receipt += PrinterCommands.twoColumn(method + ':', payment.amount.toFixed(2), width);
@@ -604,6 +636,12 @@ export class PrintService {
       });
     } else {
       receipt += cmd.EOL;
+      receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+      receipt += 'PAYMENT';
+      receipt += cmd.EOL;
+      receipt += PrinterCommands.horizontalLine(width);
+      receipt += cmd.EOL;
+      receipt += cmd.TEXT_FORMAT.TXT_ALIGN_RT;
       receipt += PrinterCommands.twoColumn(data.paymentMethod + ':', data.amountPaid.toFixed(2), width);
       receipt += cmd.EOL;
     }
@@ -649,23 +687,33 @@ export class PrintService {
     }
 
     // Footer
-    if (settings.receiptFooter) {
+    const printer = this.defaultPrinter();
+
+    const footerMessage =
+      settings.receiptFooter ||
+      settings.businessInfo.footer ||
+      appSettings.receiptFooter ||
+      'Thank you! Call again.';
+
+    if (footerMessage) {
       receipt += cmd.EOL;
       receipt += PrinterCommands.horizontalLine(width);
       receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
-      const footerLines = PrinterCommands.wrapText(settings.receiptFooter, width);
+      const footerLines = PrinterCommands.wrapText(footerMessage, width);
       receipt += footerLines.join(cmd.EOL);
       receipt += cmd.EOL;
     }
 
-    // Feed paper
-    receipt += cmd.FEED_CONTROL.CTL_VT;
-    receipt += cmd.FEED_CONTROL.CTL_VT;
-    receipt += cmd.FEED_CONTROL.CTL_VT;
-    receipt += cmd.FEED_CONTROL.CTL_VT;
+    // Feed extra paper so receipts fully exit the printer
+    const baseFeedLines = printer?.paperCutter ? 6 : 8;
+    const extraFeed = Math.max(0, settings.extraBottomFeedLines ?? 0);
+    const feedLines = baseFeedLines + extraFeed;
+
+    for (let i = 0; i < feedLines; i++) {
+      receipt += cmd.FEED_CONTROL.CTL_VT;
+    }
 
     // Cut paper if supported
-    const printer = this.defaultPrinter();
     if (printer?.paperCutter) {
       receipt += cmd.PAPER.PAPER_FULL_CUT;
     }
@@ -677,6 +725,92 @@ export class PrintService {
     }
 
     return receipt;
+  }
+
+  /**
+   * Build a simple text-based report using ESC/POS commands.
+   * This is used for analytics/report printing (not customer receipts).
+   */
+  private buildTextReport(options: {
+    title: string;
+    subtitleLines?: string[];
+    bodyLines: string[];
+    footerLines?: string[];
+  }): string {
+    const settings = this.printerSettings();
+    const appSettings = this.settings.settings();
+    const width = this.getLineWidth();
+    const cmd = ESC_POS_COMMANDS;
+
+    const name = settings.businessInfo.name || appSettings.businessName || 'ZPOS';
+
+    let out = '';
+
+    // Initialize printer
+    out += cmd.HARDWARE.HW_INIT;
+
+    // Business name (centered)
+    out += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+    const nameLines = PrinterCommands.wrapText(name, width);
+    out += nameLines.join(cmd.EOL).toUpperCase();
+    out += cmd.EOL;
+
+    // Report title
+    out += cmd.TEXT_FORMAT.TXT_BOLD_ON;
+    const titleLines = PrinterCommands.wrapText(options.title, width);
+    out += titleLines.join(cmd.EOL);
+    out += cmd.TEXT_FORMAT.TXT_BOLD_OFF;
+    out += cmd.EOL;
+
+    // Optional subtitles (date range, filters, etc.)
+    if (options.subtitleLines && options.subtitleLines.length > 0) {
+      for (const line of options.subtitleLines) {
+        const wrapped = PrinterCommands.wrapText(line, width);
+        out += wrapped.join(cmd.EOL);
+        out += cmd.EOL;
+      }
+    }
+
+    // Separator
+    out += PrinterCommands.horizontalLine(width);
+    out += cmd.EOL;
+
+    // Body (left aligned)
+    out += cmd.TEXT_FORMAT.TXT_ALIGN_LT;
+    for (const line of options.bodyLines) {
+      const wrapped = PrinterCommands.wrapText(line, width);
+      out += wrapped.join(cmd.EOL);
+      out += cmd.EOL;
+    }
+
+    // Optional footer
+    if (options.footerLines && options.footerLines.length > 0) {
+      out += PrinterCommands.horizontalLine(width);
+      out += cmd.EOL;
+      out += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+      for (const line of options.footerLines) {
+        const wrapped = PrinterCommands.wrapText(line, width);
+        out += wrapped.join(cmd.EOL);
+        out += cmd.EOL;
+      }
+    }
+
+    const printer = this.defaultPrinter();
+
+    // Feed extra paper on reports as well (especially for small Bluetooth printers)
+    const baseFeedLines = printer?.paperCutter ? 6 : 8;
+    const extraFeed = Math.max(0, settings.extraBottomFeedLines ?? 0);
+    const feedLines = baseFeedLines + extraFeed;
+
+    for (let i = 0; i < feedLines; i++) {
+      out += cmd.FEED_CONTROL.CTL_VT;
+    }
+
+    if (printer?.paperCutter) {
+      out += cmd.PAPER.PAPER_FULL_CUT;
+    }
+
+    return out;
   }
 
   /**
@@ -862,6 +996,85 @@ export class PrintService {
         return this.printReceipt(data, retries + 1);
       }
       
+      this.lastError.set(errorMsg);
+      return false;
+    }
+  }
+
+  /**
+   * Print an analytics/report page using the default printer.
+   */
+  async printTextReport(options: {
+    title: string;
+    subtitleLines?: string[];
+    bodyLines: string[];
+    footerLines?: string[];
+  }, retries = 0): Promise<boolean> {
+    const printer = this.defaultPrinter();
+
+    if (!printer || !printer.printing) {
+      const errorMsg = 'No printer configured or printing is disabled.';
+      this.lastError.set(errorMsg);
+      console.warn(errorMsg);
+      return false;
+    }
+
+    if (!this.isConnected() && printer.printerType === 'BT') {
+      const errorMsg = 'Printer not connected. Attempting to reconnect...';
+      console.warn(errorMsg);
+
+      try {
+        await this.connect(printer);
+      } catch (error) {
+        this.lastError.set('Failed to reconnect to printer.');
+        return false;
+      }
+    }
+
+    this.isPrinting.set(true);
+    this.lastError.set(null);
+
+    try {
+      const reportData = this.buildTextReport(options);
+      const settings = this.printerSettings();
+
+      const copies = settings.printCopies && settings.printCopies > 0
+        ? settings.printCopies
+        : 1;
+
+      for (let i = 0; i < copies; i++) {
+        await Promise.race([
+          this.sendToPrinter(reportData),
+          this.timeoutPromise(this.PRINT_TIMEOUT, 'Print operation timeout')
+        ]);
+
+        if (i < copies - 1) {
+          await this.delay(500);
+        }
+      }
+
+      this.isPrinting.set(false);
+      console.log('Report printed successfully');
+      return true;
+    } catch (error: any) {
+      console.error('Report print error:', error);
+      this.isPrinting.set(false);
+
+      let errorMsg = 'Failed to print report.';
+      if (error?.message?.includes('timeout')) {
+        errorMsg = 'Print timeout. The printer may be offline or busy.';
+      } else if (error?.message?.includes('not connected')) {
+        errorMsg = 'Printer connection lost.';
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+
+      if (retries < this.MAX_RETRIES) {
+        console.log(`Retrying report print (${retries + 1}/${this.MAX_RETRIES})...`);
+        await this.delay(this.RETRY_DELAY * (retries + 1));
+        return this.printTextReport(options, retries + 1);
+      }
+
       this.lastError.set(errorMsg);
       return false;
     }
