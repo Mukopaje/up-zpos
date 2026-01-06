@@ -1,0 +1,23 @@
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.summary-row h2 {
+  margin: 0;
+}
+
+.amount {
+  text-align: right;
+}
+
+.empty-state {
+  text-align: center;
+  margin-top: 40px;
+}
+
+.empty-state ion-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}

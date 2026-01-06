@@ -1,86 +1,149 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar color="primary">
     <ion-title>License Activation</ion-title>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" class="ion-padding">
-  <div class="login-container">
-    <div class="logo-section">
-      <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
-    </div>
+<ion-content class="ion-padding">
+  <div class="login-page">
+    <div class="login-layout">
 
-    <ion-card class="login-card">
-      <ion-card-header>
-        <ion-card-title>Activate Your License</ion-card-title>
-      </ion-card-header>
+      <!-- Left: Brand & message (desktop); on mobile this stacks above the form -->
+      <div class="left-panel">
+        <div class="logo-section">
+          <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
+          <h1>ZPOS</h1>
+          <p>Activate this device using your license code.</p>
+        </div>
+      </div>
 
-      <ion-card-content>
-        <ion-text color="medium" class="ion-margin-bottom">
-          <p>Enter your business account credentials to activate this device</p>
-        </ion-text>
+      <!-- Right: Activation form -->
+      <div class="right-panel">
+        <ion-card class="login-card">
+          <ion-card-header>
+            <ion-card-title>Activate Your License</ion-card-title>
+          </ion-card-header>
 
-        <form (ngSubmit)="onLogin()">
-          <ion-item>
-            <ion-label position="floating">Business Email</ion-label>
-            <ion-input
-              type="email"
-              [(ngModel)]="email"
-              name="email"
-              required
-              autocomplete="email"
-            ></ion-input>
-          </ion-item>
+          <ion-card-content>
+            <ion-text color="medium" class="ion-margin-bottom">
+              <p>Enter your license code and PIN to link this device to your account.</p>
+            </ion-text>
 
-          <ion-item>
-            <ion-label position="floating">Password</ion-label>
-            <ion-input
-              type="password"
-              [(ngModel)]="password"
-              name="password"
-              required
-              autocomplete="current-password"
-            ></ion-input>
-          </ion-item>
+            <form (ngSubmit)="onLogin()" class="login-form">
+              <ion-item>
+                <ion-label position="stacked">License Code</ion-label>
+                <ion-input
+                  type="text"
+                  [(ngModel)]="licenseCode"
+                  name="licenseCode"
+                  required
+                  autocomplete="off"
+                  placeholder="e.g. ZP-ABCD-1234"
+                ></ion-input>
+              </ion-item>
 
-          <ion-button
-            expand="block"
-            type="submit"
-            color="primary"
-            class="ion-margin-top"
-            [disabled]="!email || !password"
-          >
-            Activate License
-          </ion-button>
-        </form>
+              <ion-item>
+                <ion-label position="stacked">PIN</ion-label>
+                <ion-input
+                  type="password"
+                  [(ngModel)]="pin"
+                  name="pin"
+                  required
+                  autocomplete="off"
+                  placeholder="Enter your activation PIN"
+                ></ion-input>
+              </ion-item>
 
-        <div class="help-text ion-margin-top">
+              <ion-button
+                expand="block"
+                type="submit"
+                color="primary"
+                class="ion-margin-top primary-action"
+                [disabled]="!licenseCode || !pin"
+              >
+                Activate License
+              </ion-button>
+            </form>
+
+            <div class="help-text ion-margin-top">
+              <ion-text color="medium">
+                <small>Use the license code and PIN provided to the business owner. After activation, staff will log in using their PINs.</small>
+              </ion-text>
+            </div>
+
+            <div class="register-link ion-margin-top ion-text-center">
+              <ion-text color="medium">
+                <p>Don't have a license key?</p>
+              </ion-text>
+              <ion-button fill="outline" color="primary" routerLink="/register" expand="block">
+                Register Your Business
+              </ion-button>
+            </div>
+
+            <div class="forgot-license ion-margin-top ion-text-center">
+              <ion-button fill="clear" size="small" (click)="toggleRecovery()">
+                Forgot your license key?
+              </ion-button>
+            </div>
+
+            <div *ngIf="showRecovery" class="recover-section ion-margin-top">
+              <ion-item>
+                <ion-label position="stacked">Owner Email</ion-label>
+                <ion-input
+                  type="email"
+                  [(ngModel)]="recoverEmail"
+                  name="recoverEmail"
+                  autocomplete="off"
+                ></ion-input>
+              </ion-item>
+
+              <ion-item>
+                <ion-label position="stacked">Owner PIN</ion-label>
+                <ion-input
+                  type="password"
+                  inputmode="numeric"
+                  [(ngModel)]="recoverPin"
+                  name="recoverPin"
+                  maxlength="6"
+                  autocomplete="off"
+                ></ion-input>
+              </ion-item>
+
+              <ion-button
+                expand="block"
+                type="button"
+                color="secondary"
+                class="ion-margin-top"
+                (click)="onRecoverLicense()"
+              >
+                Email My License Key
+              </ion-button>
+
+              <div class="help-text ion-margin-top">
+                <ion-text color="medium">
+                  <small>
+                    We will send the license key to the registered owner email if the details match an existing
+                    account.
+                  </small>
+                </ion-text>
+              </div>
+            </div>
+
+            <div class="forgot-password ion-margin-top">
+              <ion-text color="medium">
+                <small>Need help? Contact support&#64;zpos.co.zm</small>
+              </ion-text>
+            </div>
+          </ion-card-content>
+        </ion-card>
+
+        <div class="version-info">
           <ion-text color="medium">
-            <small>This is a one-time setup. After activation, users will login with their PINs.</small>
+            <small>Version 2.0.0 • Powered by ZPOS</small>
           </ion-text>
         </div>
+      </div>
 
-        <div class="register-link ion-margin-top ion-text-center">
-          <ion-text color="medium">
-            <p>Don't have a license key?</p>
-          </ion-text>
-          <ion-button fill="outline" color="primary" routerLink="/register" expand="block">
-            Register Your Business
-          </ion-button>
-        </div>
-
-        <div class="forgot-password ion-margin-top">
-          <ion-text color="medium">
-            <small>Need help? Contact support&#64;zpos.co.zm</small>
-          </ion-text>
-        </div>
-      </ion-card-content>
-    </ion-card>
-
-    <div class="version-info">
-      <ion-text color="medium">
-        <small>Version 2.0.0 • Powered by ZPOS</small>
-      </ion-text>
     </div>
   </div>
 </ion-content>

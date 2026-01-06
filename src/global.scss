@@ -14,15 +14,12 @@
 @import "@ionic/angular/css/text-transformation.css";
 @import "@ionic/angular/css/flex-utils.css";
 
-/* ZPOS theme variables (brand colors, etc.) */
-@import "./theme/variables.scss";
-
 /* Custom Global Styles */
 * {
   box-sizing: border-box;
 }
 
-/* Force ZPOS brand color for primary elements */
+/* Force ZPOS brand color for primary elements (explicit brand hex) */
 .ion-color-primary {
   --ion-color-base: #30acb4 !important;
   --ion-color-base-rgb: 48, 172, 180 !important;
@@ -57,6 +54,12 @@ ion-button {
 
 ion-item {
   --border-radius: 8px;
+}
+
+/* Avoid label/placeholder overlap for floating labels */
+ion-input[labelPlacement="floating"],
+ion-textarea[labelPlacement="floating"] {
+  --placeholder-opacity: 0;
 }
 
 /* Modern scrollbar */
@@ -98,6 +101,13 @@ ion-item {
 .p-1 { padding: 0.5rem; }
 .p-2 { padding: 1rem; }
 .p-3 { padding: 1.5rem; }
+
+/* Hide desktop-only keyboard shortcut hints on small screens */
+@media (max-width: 767px) {
+  .shortcuts {
+    display: none !important;
+  }
+}
 
 /* Loading skeleton */
 .skeleton-text {

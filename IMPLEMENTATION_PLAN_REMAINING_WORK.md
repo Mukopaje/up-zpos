@@ -1,10 +1,20 @@
 # Remaining Work – Implementation Plan
 
-_Last updated: December 29, 2025_
+_Last updated: January 2, 2026_
 
 This plan focuses on completing remaining work (including optional features) with **real-device testing (printing, scanning, offline)** as the first gate before further build work.
 
 ---
+
+## Status Snapshot (as of January 2, 2026)
+
+- **Core App & Management System** – Complete as per PROGRESS_REPORT (core services, POS modes, management pages, checkout, and Bluetooth receipt printing wired in code).
+- **Hospitality Unification & Kitchen Tickets** – Implemented in the app: hospitality tables now feed into the category POS workflow and "Close & Send" prints kitchen tickets via PrintService; awaiting real-device testing in Phase 0.
+- **Phase 0 – Real Device Validation** – Not yet run end-to-end on physical hardware; this phase tracks receipt printing, kitchen tickets, barcode scanning, and offline behavior on actual devices.
+- **Phase 1–2 – Backend Deployment & Sync** – Planned; assumes backend project exists but cloud deployment, wiring to this app, and multi-terminal validation are still to be executed.
+- **Phase 3 – Remaining Admin Features** – Not started; AccountsPage, CustomerDetailsPage, LocationsPage, and OnboardingPage remain to be implemented.
+- **Phase 3b – Automation Engine** – Designed in this document; NestJS AutomationsModule, AutomationsService, and admin UI still to be implemented.
+- **Phase 4–6 – Enhancements, Testing, Release** – Planned only; to be tackled after Phases 0–3/3b are complete.
 
 ## Phase 0 – Real Device Validation (Blocker Gate)
 
@@ -23,12 +33,14 @@ This plan focuses on completing remaining work (including optional features) wit
 - Test flows:
   - Print a test receipt from Printer Settings / Print Test.
   - Complete a real checkout (cash sale) and auto-print a receipt.
+  - From Hospitality tables, use **Close & Send** to print a kitchen ticket for newly sent items.
 - Verify:
   - Print speed and stability.
   - Layout and alignment (logo position, columns, totals).
   - Currency format and symbols.
   - Paper width and wrapping.
   - Multi-copy behavior (if configured).
+  - Kitchen ticket layout (table, guests, waiter, items) and correct items printed per table.
 - Error behavior:
   - Printer off / out of range.
   - Out of paper / paper door open.
@@ -189,6 +201,51 @@ If any fail, capture:
 
 ---
 
+## Phase 3b – Automation Engine & POS Workflows
+
+**Goal:** Introduce a SambaPOS-style automation layer (events → rules → actions) that drives printing, hospitality flows, and other workflows in a configurable, tenant-aware way.
+
+### 3b.1 Backend Automations Module
+- Implement **AutomationsModule** in the NestJS backend with entities (per tenant):
+  - `AutomationEvent` – named events like `PaymentCompleted`, `OrderCreated`, `HospitalityOrderSent`, `TableOpened`, `TableCleared`.
+  - `AutomationAction` – reusable actions like `PrintReceipt`, `PrintKitchenTicket`, `UpdateTableStatus`, `ApplyTicketDiscount`, `CallWebhook`.
+  - `AutomationRule` – connects an event to one or more actions, with optional conditions and parameter mappings.
+  - (Optional) `AutomationCommand` – commands that can be triggered from UI buttons and mapped to rules.
+- Implement **AutomationsService** with:
+  - `emitEvent(name, payload)` to load active rules for the event and execute matching actions.
+  - Condition evaluation (simple JSON-based conditions on payload fields, e.g. total > X, businessType == 'restaurant').
+  - Action handler registry keyed by `action.type` so handlers are code-level but rules and parameters are fully data-driven.
+- Wire key backend events to `emitEvent`:
+  - When an order is created/updated in hospitality (e.g. unsent → sent), emit `HospitalityOrderSent`.
+  - When checkout completes and order is fully paid, emit `PaymentCompleted`.
+  - When a table is opened/cleared, emit `TableOpened` / `TableCleared`.
+- Seed **default rules** per tenant on creation/migration, e.g.:
+  - `PaymentCompleted` → `PrintReceipt` on the terminal’s receipt printer.
+  - `HospitalityOrderSent` → `PrintKitchenTicket` routed to the table’s/kitchen’s printer.
+  - `TableCleared` → `CallWebhook` for integrations (optional).
+
+### 3b.2 POS & UI Integration
+- Ensure frontend and backend share a clear automation contract:
+  - POS emits domain events (via API) in the minimal format the backend needs.
+  - POS can optionally fetch automation **commands**/metadata to render buttons (e.g. Reprint Receipt, Fire Kitchen, Void Ticket) that call `/automation/command` endpoints.
+- Extend existing flows to rely on automations instead of hard-coded side effects where appropriate:
+  - Checkout flow: treat receipt printing as a `PaymentCompleted` automation, not a direct `printReceipt` call.
+  - Hospitality: treat kitchen printing as a `HospitalityOrderSent` automation, so routing to printers is centrally managed.
+- Add a minimal **Automations Admin UI** (can be under Settings / Advanced):
+  - List existing rules for the tenant with event, actions, and status (enabled/disabled).
+  - Allow basic editing of simple rules (toggle enabled, adjust simple parameters such as target printer or number of copies).
+  - Guard this UI with admin-only permissions.
+
+### 3b.3 Exit Criteria
+- Backend can accept events and execute rules with at least the core handlers (print receipt, print kitchen ticket, update table status, call webhook).
+- Default automation rules cover the main flows:
+  - Retail/category checkout with automatic receipt printing.
+  - Hospitality send-to-kitchen with kitchen tickets.
+  - Table open/clear side effects where needed.
+- POS no longer relies solely on hard-coded printing/hospitality side-effects; critical flows are backed by the automation engine.
+
+---
+
 ## Phase 4 – Optional / Enhancing Features
 
 **Goal:** Add higher-value features that are not blockers but improve competitiveness.
@@ -228,6 +285,7 @@ If any fail, capture:
   - `SqliteService` (core CRUD + outbox behavior).
   - `SyncService` (push/pull logic + conflicts).
   - `AuthService` (tenant & PIN auth flows).
+  - `AutomationsService` (emitEvent, rule evaluation, and action handler registry behavior).
 - High-value E2E tests (Cypress/Playwright or similar):
   - Login → POS → sale → print (mock printer or stub).
   - Sync between two simulated devices (can partly be manual at first).

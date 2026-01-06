@@ -59,7 +59,8 @@
     "sql.js": "1.11.0",
     "tslib": "^2.6.2",
     "xlsx": "^0.18.5",
-    "zone.js": "^0.14.4"
+    "zone.js": "^0.14.4",
+    "@zpos/capacitor-l156-printer": "file:../capacitorprinters/capacitor-l156-printer"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^17.3.0",

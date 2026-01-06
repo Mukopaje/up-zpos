@@ -1,0 +1,46 @@
+.onboarding-content {
+  --padding-start: 16px;
+  --padding-end: 16px;
+  --padding-top: 16px;
+  --padding-bottom: 16px;
+}
+
+.onboarding-shell {
+  display: flex;
+  justify-content: center;
+}
+
+.onboarding-panel {
+  width: 100%;
+  max-width: 720px;
+}
+
+.onboarding-steps {
+  padding: 8px 0 16px;
+}
+
+.step-body {
+  padding-top: 8px;
+}
+
+.preview {
+  margin-top: 16px;
+}
+
+.preview-number {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.preview-help {
+  font-size: 0.8rem;
+}
+
+@media (min-width: 1024px) {
+  .onboarding-content {
+    --padding-start: 32px;
+    --padding-end: 32px;
+    --padding-top: 32px;
+    --padding-bottom: 32px;
+  }
+}

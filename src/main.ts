@@ -17,10 +17,15 @@ import { CustomersService } from './app/core/services/customers.service';
 import { BarcodeService } from './app/core/services/barcode.service';
 import { SqliteService } from './app/core/services/sqlite.service';
 import { SyncService } from './app/core/services/sync.service';
+import { addIcons } from 'ionicons';
+import { mapOutline } from 'ionicons/icons';
 
 if (environment.production) {
   enableProdMode();
 }
+
+// Register any Ionicons that are not available by default
+addIcons({ mapOutline });
 
 bootstrapApplication(AppComponent, {
   providers: [

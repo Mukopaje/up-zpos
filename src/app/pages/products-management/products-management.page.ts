@@ -59,6 +59,7 @@ import {
   refreshOutline,
   pricetagsOutline,
 } from 'ionicons/icons';
+import { ViewChild, ElementRef } from '@angular/core';
 
 @Component({
   selector: 'app-products-management',
@@ -133,6 +134,9 @@ export class ProductsManagementPage implements OnInit {
   });
 
   private productsService = inject(ProductsService);
+  private apiService = inject(ApiService);
+
+  @ViewChild('fileInput') fileInput?: ElementRef<HTMLInputElement>;
 
   constructor(
     private modalCtrl: ModalController,
@@ -316,6 +320,11 @@ export class ProductsManagementPage implements OnInit {
           handler: () => this.exportToCSV(),
         },
         {
+          text: 'Email Import Template',
+          icon: 'mail-outline',
+          handler: () => this.emailImportTemplate(),
+        },
+        {
           text: 'Sync with Cloud',
           icon: 'refresh-outline',
           handler: () => this.syncWithCloud(),
@@ -331,8 +340,49 @@ export class ProductsManagementPage implements OnInit {
   }
 
   async importFromCSV() {
-    // TODO: Implement CSV import using Capacitor Filesystem
-    await this.showToast('CSV import coming soon', 'warning');
+    if (this.fileInput?.nativeElement) {
+      this.fileInput.nativeElement.value = '';
+      this.fileInput.nativeElement.click();
+    } else {
+      await this.showToast('File input not available', 'danger');
+    }
+  }
+
+  async onFileSelected(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files && input.files[0];
+    if (!file) {
+      return;
+    }
+
+    this.isLoading.set(true);
+    try {
+      const result = await this.apiService.importProductsFromCsv(file);
+      await this.loadProducts();
+
+      const summary = `Imported: ${result.imported}, Updated: ${result.updated}, Skipped: ${result.skipped}`;
+      await this.showToast(`Import completed. ${summary}`, 'success');
+
+      if (result.errors && result.errors.length > 0) {
+        const firstErrors = result.errors.slice(0, 5)
+          .map((e) => `Line ${e.line}: ${e.message}`)
+          .join('\n');
+
+        const alert = await this.alertCtrl.create({
+          header: 'Import Warnings',
+          message:
+            'Some rows could not be imported. Here are the first few issues:\n' +
+            firstErrors,
+          buttons: ['OK'],
+        });
+        await alert.present();
+      }
+    } catch (error: any) {
+      console.error('Error importing products:', error);
+      await this.showToast(error.message || 'Failed to import products', 'danger');
+    } finally {
+      this.isLoading.set(false);
+    }
   }
 
   async exportToCSV() {
@@ -342,6 +392,19 @@ export class ProductsManagementPage implements OnInit {
       await this.showToast('Products exported successfully', 'success');
     } catch (error) {
       await this.showToast('Failed to export products', 'danger');
+    }
+  }
+
+  async emailImportTemplate() {
+    this.isLoading.set(true);
+    try {
+      await this.apiService.emailProductImportTemplate();
+      await this.showToast('Import template emailed to you', 'success');
+    } catch (error: any) {
+      console.error('Error emailing import template:', error);
+      await this.showToast(error.message || 'Failed to email import template', 'danger');
+    } finally {
+      this.isLoading.set(false);
     }
   }
 

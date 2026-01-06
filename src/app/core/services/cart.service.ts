@@ -1,7 +1,7 @@
 import { Injectable, signal, computed, effect } from '@angular/core';
 import { StorageService } from './storage.service';
 import { SettingsService } from './settings.service';
-import { Product, CartItem } from '../../models';
+import { Product, CartItem, OrderModifier } from '../../models';
 
 export interface TaxSettings {
   active: boolean;
@@ -18,6 +18,7 @@ export interface CartSummary {
   ticketDiscount: number;
   total: number;
 }
+export type TicketPromotionType = 'PERCENT' | 'AMOUNT';
 
 @Injectable({
   providedIn: 'root'
@@ -397,6 +398,79 @@ export class CartService {
   }
 
   /**
+   * Change unit price for a specific item and recalculate totals
+   */
+  updateItemPrice(productId: string, newPrice: number): void {
+    const items = [...this.cartItems()];
+    const index = items.findIndex(item => item.product._id === productId);
+
+    if (index >= 0) {
+      const item = items[index];
+      const taxCalc = this.calculateTax(newPrice, item.quantity, item.discount);
+
+      items[index] = {
+        ...item,
+        price: taxCalc.price,
+        tax: taxCalc.itemTotalTax,
+        itemTotalTax: taxCalc.itemTotalTax,
+        tax_amount: taxCalc.tax_amount,
+        total: taxCalc.itemTotalPrice,
+        itemTotalPrice: taxCalc.itemTotalPrice
+      };
+
+      this.cartItems.set(items);
+    }
+  }
+
+  /**
+   * Update modifiers for a specific item and recalculate its price/tax.
+   * Keeps existing variant/portion/bundle selections.
+   */
+  updateItemModifiers(productId: string, modifiers: OrderModifier[]): void {
+    const items = [...this.cartItems()];
+    const index = items.findIndex(item => item.product._id === productId);
+
+    if (index >= 0) {
+      const item = items[index];
+
+      // Rebuild unit price from product + options + modifiers
+      let price = item.product.price;
+
+      if (item.selectedVariant) {
+        price += item.selectedVariant.priceModifier;
+      }
+
+      if (item.selectedPortion) {
+        price *= item.selectedPortion.priceMultiplier;
+      }
+
+      if (item.selectedBundle) {
+        price *= item.selectedBundle.priceMultiplier;
+      }
+
+      if (modifiers && modifiers.length > 0) {
+        const modifiersTotal = modifiers.reduce((sum, mod) => sum + mod.price, 0);
+        price += modifiersTotal;
+      }
+
+      const taxCalc = this.calculateTax(price, item.quantity, item.discount || 0);
+
+      items[index] = {
+        ...item,
+        price: taxCalc.price,
+        tax: taxCalc.itemTotalTax,
+        itemTotalTax: taxCalc.itemTotalTax,
+        tax_amount: taxCalc.tax_amount,
+        total: taxCalc.itemTotalPrice,
+        itemTotalPrice: taxCalc.itemTotalPrice,
+        modifiers
+      };
+
+      this.cartItems.set(items);
+    }
+  }
+
+  /**
    * Apply percentage discount to entire ticket
    */
   applyTicketDiscount(percentage: number): void {
@@ -410,6 +484,26 @@ export class CartService {
    */
   applyTicketDiscountAmount(amount: number): void {
     this.ticketDiscount.set(Number(amount.toFixed(2)));
+  }
+
+  /**
+   * Apply a promotion to the current ticket based on subtotal.
+   * PERCENT applies a percentage off, AMOUNT applies a fixed discount.
+   */
+  applyTicketPromotion(type: TicketPromotionType, value: number): void {
+    const subtotal = this.subtotal();
+    if (subtotal <= 0 || value <= 0) {
+      this.ticketDiscount.set(0);
+      return;
+    }
+
+    if (type === 'PERCENT') {
+      const discountAmount = Number(((value / 100) * subtotal).toFixed(2));
+      this.ticketDiscount.set(discountAmount);
+    } else {
+      const amount = Math.min(value, subtotal);
+      this.ticketDiscount.set(Number(amount.toFixed(2)));
+    }
   }
 
   /**
@@ -491,5 +585,15 @@ export class CartService {
   getQuantity(productId: string): number {
     const item = this.getItem(productId);
     return item ? item.quantity : 0;
+  }
+
+  /**
+   * Replace entire cart with provided items (used for hospitality tables
+   * to adopt existing table items into the main POS cart workflow).
+   */
+  replaceItems(items: CartItem[]): void {
+    this.cartItems.set(items || []);
+    this.ticketDiscount.set(0);
+    this.couponDiscount.set(0);
   }
 }

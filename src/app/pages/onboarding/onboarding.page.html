@@ -1,0 +1,154 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>Setup ZPOS</ion-title>
+    <ion-buttons slot="end">
+      <ion-button color="light" (click)="skip()">Skip</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="onboarding-content">
+  <div class="onboarding-shell">
+    <div class="onboarding-panel">
+      <div class="onboarding-steps">
+        <ion-segment [value]="step()" color="primary">
+          <ion-segment-button [value]="1">
+            <ion-label>Business</ion-label>
+          </ion-segment-button>
+          <ion-segment-button [value]="2">
+            <ion-label>Invoices</ion-label>
+          </ion-segment-button>
+          <ion-segment-button [value]="3">
+            <ion-label>POS Mode</ion-label>
+          </ion-segment-button>
+        </ion-segment>
+
+        <ion-progress-bar [value]="step() / 3" color="primary"></ion-progress-bar>
+      </div>
+
+      @if (step() === 1) {
+        <div class="step-body">
+          <h2>Business details</h2>
+          <p>Tell us about your business so we can personalize ZPOS.</p>
+
+          <form [formGroup]="businessForm">
+            <ion-list lines="full">
+              <ion-item>
+                <ion-label position="stacked">Business name *</ion-label>
+                <ion-input formControlName="businessName" placeholder="e.g. ZPOS Supermarket"></ion-input>
+              </ion-item>
+
+              <ion-item>
+                <ion-label position="stacked">Business type *</ion-label>
+                <ion-select formControlName="businessType" interface="popover" placeholder="Select business type">
+                  <ion-select-option value="retail">Retail / General store</ion-select-option>
+                  <ion-select-option value="supermarket">Supermarket</ion-select-option>
+                  <ion-select-option value="restaurant">Restaurant</ion-select-option>
+                  <ion-select-option value="bar">Bar / Pub</ion-select-option>
+                  <ion-select-option value="cafe">Cafe</ion-select-option>
+                  <ion-select-option value="pharmacy">Pharmacy</ion-select-option>
+                  <ion-select-option value="salon">Salon / Spa</ion-select-option>
+                  <ion-select-option value="other">Other</ion-select-option>
+                </ion-select>
+              </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Address</ion-label>
+            <ion-input formControlName="address"></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Phone</ion-label>
+            <ion-input formControlName="phone" type="tel"></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Email</ion-label>
+            <ion-input formControlName="email" type="email"></ion-input>
+          </ion-item>
+        </ion-list>
+      </form>
+        </div>
+      }
+
+      @if (step() === 2) {
+        <div class="step-body">
+          <h2>Invoice numbering</h2>
+          <p>Configure how invoice numbers will appear on receipts.</p>
+
+          <form [formGroup]="invoiceForm">
+            <ion-list lines="full">
+              <ion-item>
+                <ion-label position="stacked">Invoice prefix *</ion-label>
+                <ion-input formControlName="prefix" placeholder="INV"></ion-input>
+              </ion-item>
+
+              <ion-item>
+                <ion-label position="stacked">Tax rate (%)</ion-label>
+                <ion-input formControlName="taxRate" type="number"></ion-input>
+              </ion-item>
+
+              <ion-item>
+                <ion-label position="stacked">Currency</ion-label>
+                <ion-input formControlName="currency" placeholder="ZMW"></ion-input>
+              </ion-item>
+            </ion-list>
+          </form>
+
+          <div class="preview">
+            <ion-text color="medium">
+              <p>Example invoice number:</p>
+              <p class="preview-number">{{ invoicePreview() }}</p>
+              <p class="preview-help">Format: PREFIX-YYYYMMDD-#### (e.g. INV-20251229-0269)</p>
+            </ion-text>
+          </div>
+        </div>
+      }
+
+      @if (step() === 3) {
+        <div class="step-body">
+          <h2>Default POS mode</h2>
+          <p>Choose which POS screen opens after login.</p>
+
+          <form [formGroup]="posModeForm">
+            <ion-list lines="full">
+              <ion-item>
+                <ion-label position="stacked">POS mode *</ion-label>
+                <ion-select formControlName="defaultPosMode" interface="popover" placeholder="Select POS mode">
+                  <ion-select-option value="retail">Retail</ion-select-option>
+                  <ion-select-option value="category">Category</ion-select-option>
+                  <ion-select-option value="hospitality">Hospitality</ion-select-option>
+                </ion-select>
+              </ion-item>
+            </ion-list>
+
+            <ion-text color="medium">
+              <p>
+                You can change this later in Settings. Hospitality is recommended for restaurants;
+                Category or Retail for supermarkets and shops.
+              </p>
+            </ion-text>
+          </form>
+        </div>
+      }
+    </div>
+  </div>
+</ion-content>
+
+<ion-footer>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-button color="light" (click)="back()" [disabled]="step() === 1">Back</ion-button>
+    </ion-buttons>
+
+    <ion-buttons slot="end">
+      <ion-button color="light" [disabled]="!canGoNext()" (click)="next()">
+        @if (step() < 3) {
+          <span>Next</span>
+        } @else {
+          <span>Finish</span>
+        }
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-footer>

@@ -30,6 +30,8 @@ export interface AppSettings {
   // POS tile appearance settings
   categoryTileBackgroundColor?: string;
   productTileBackgroundColor?: string;
+  // Post-payment UX
+  showReceiptModalAfterPayment?: boolean;
 }
 
 @Injectable({
@@ -63,7 +65,8 @@ export class SettingsService {
     offlineMode: true,
     theme: 'auto',
     categoryTileBackgroundColor: '#FF9800',
-    productTileBackgroundColor: '#4CAF50'
+    productTileBackgroundColor: '#4CAF50',
+    showReceiptModalAfterPayment: true
   });
 
   // Public signals

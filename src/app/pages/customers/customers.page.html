@@ -110,6 +110,9 @@
             }
             
             <div class="action-buttons">
+              <ion-button fill="clear" size="small" (click)="showLoyaltyInfo(customer, $event)">
+                <ion-icon name="star" slot="icon-only"></ion-icon>
+              </ion-button>
               @if (customer.balance > 0) {
                 <ion-button fill="clear" size="small" (click)="recordPayment(customer); $event.stopPropagation()">
                   <ion-icon name="cash" slot="icon-only"></ion-icon>

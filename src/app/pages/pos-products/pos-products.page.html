@@ -21,6 +21,21 @@
     ></ion-searchbar>
   </ion-toolbar>
 
+  <!-- Menus toolbar (shows only when multiple active menus) -->
+  <ion-toolbar class="menu-toolbar" *ngIf="showMenuBar()">
+    <div class="menu-strip">
+      <button
+        *ngFor="let menu of activeMenus()"
+        class="menu-tile"
+        [class.active]="selectedMenuId() === menu._id"
+        [style.background-color]="menu.color || 'var(--ion-color-primary)'"
+        (click)="selectMenu(menu._id)"
+      >
+        <span class="menu-name">{{ menu.name }}</span>
+      </button>
+    </div>
+  </ion-toolbar>
+
   <!-- Category chips -->
   <ion-toolbar class="category-toolbar">
     <div class="category-chips">
@@ -31,7 +46,7 @@
         <ion-label>All</ion-label>
       </ion-chip>
       <ion-chip
-        *ngFor="let category of categories()"
+        *ngFor="let category of visibleCategories()"
         [color]="selectedCategory() === category._id ? 'primary' : 'medium'"
         (click)="selectCategory(category._id)"
       >

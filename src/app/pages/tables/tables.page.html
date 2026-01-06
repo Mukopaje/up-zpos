@@ -1,41 +1,53 @@
 <ion-header>
-  <ion-toolbar>
+  <ion-toolbar color="primary">
     <ion-buttons slot="start">
       <ion-back-button defaultHref="/terminals"></ion-back-button>
     </ion-buttons>
     <ion-title>Tables Management</ion-title>
     <ion-buttons slot="end">
-      <ion-button (click)="createTable()">
-        <ion-icon slot="icon-only" name="add-outline"></ion-icon>
+      <ion-button fill="clear" color="light" (click)="openBulkForm()">
+        <ion-icon slot="start" name="list-outline"></ion-icon>
+        <ion-label>Bulk Tables</ion-label>
+      </ion-button>
+      <ion-button fill="clear" color="light" (click)="createTable()">
+        <ion-icon slot="start" name="add-outline"></ion-icon>
+        <ion-label>New Table</ion-label>
       </ion-button>
     </ion-buttons>
-  </ion-toolbar>
-
-  <ion-toolbar>
-    <ion-segment [(ngModel)]="filterSection" (ionChange)="filterTables()">
-      <ion-segment-button value="all">
-        <ion-label>All</ion-label>
-      </ion-segment-button>
-      @for (section of sections(); track section) {
-        <ion-segment-button [value]="section">
-          <ion-label>{{ section }}</ion-label>
-        </ion-segment-button>
-      }
-    </ion-segment>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
   <div class="tables-container">
+    <div class="tables-filters" *ngIf="sections().length > 0 || filterSection !== 'all'">
+      <div class="filters-label">Filter by section</div>
+      <ion-segment [(ngModel)]="filterSection" (ionChange)="filterTables()">
+        <ion-segment-button value="all">
+          <ion-label>All</ion-label>
+        </ion-segment-button>
+        <ion-segment-button value="unassigned">
+          <ion-label>Unassigned</ion-label>
+        </ion-segment-button>
+        @for (section of sections(); track section) {
+          <ion-segment-button [value]="section">
+            <ion-label>{{ section }}</ion-label>
+          </ion-segment-button>
+        }
+      </ion-segment>
+    </div>
     @if (filteredTables().length === 0) {
       <div class="empty-state">
         <ion-icon name="restaurant-outline"></ion-icon>
         <h2>No Tables Found</h2>
         <p>{{ filterSection === 'all' ? 'Create your first table to get started' : 'No tables in this section' }}</p>
         @if (filterSection === 'all') {
-          <ion-button (click)="createTable()">
+          <ion-button color="primary" (click)="createTable()">
             <ion-icon slot="start" name="add-outline"></ion-icon>
             Create Table
+          </ion-button>
+          <ion-button fill="outline" color="primary" (click)="openBulkForm()">
+            <ion-icon slot="start" name="list-outline"></ion-icon>
+            Bulk Create Tables
           </ion-button>
         }
       </div>
@@ -145,6 +157,16 @@
                   Edit
                 </ion-button>
 
+                <ion-button
+                  size="small"
+                  fill="outline"
+                  color="medium"
+                  *ngIf="table.section"
+                  (click)="clearSection(table)">
+                  <ion-icon slot="start" name="remove-outline"></ion-icon>
+                  Unassign
+                </ion-button>
+
                 @if (table.status === 'free') {
                   <ion-button size="small" fill="solid" color="success" (click)="occupyTable(table)">
                     <ion-icon slot="start" name="person-add-outline"></ion-icon>
@@ -180,3 +202,148 @@
     }
   </div>
 </ion-content>
+
+<!-- Create/Edit Table Modal -->
+<ion-modal [isOpen]="showTableForm()" (didDismiss)="closeTableForm()">
+  <ng-template>
+    <ion-header>
+      <ion-toolbar color="primary">
+        <ion-title>{{ formMode === 'create' ? 'Create Table' : 'Edit Table' }}</ion-title>
+        <ion-buttons slot="end">
+          <ion-button color="light" (click)="closeTableForm()">
+            <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="ion-padding">
+      <div class="table-form">
+        <ion-list lines="full">
+          <ion-item>
+            <ion-label position="stacked">Table Number *</ion-label>
+            <ion-input [(ngModel)]="tableForm.number" placeholder="e.g. T1, T2"></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Table Name</ion-label>
+            <ion-input [(ngModel)]="tableForm.name" placeholder="Optional name"></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Capacity *</ion-label>
+            <ion-input type="number" min="1" [(ngModel)]="tableForm.capacity"></ion-input>
+          </ion-item>
+
+          <ion-item>
+            <ion-label position="stacked">Section</ion-label>
+            <ion-input [(ngModel)]="tableForm.section" placeholder="e.g. Main Floor, Terrace"></ion-input>
+          </ion-item>
+
+          @if (sections().length > 0) {
+            <div class="section-suggestions">
+              <div class="section-suggestions-label">Existing sections</div>
+              <div class="section-suggestions-chips">
+                @for (section of sections(); track section) {
+                  <ion-chip (click)="tableForm.section = section" [outline]="tableForm.section !== section">
+                    <ion-label>{{ section }}</ion-label>
+                  </ion-chip>
+                }
+              </div>
+            </div>
+          }
+
+          <ion-item>
+            <ion-label position="stacked">Floor</ion-label>
+            <ion-input type="number" min="1" [(ngModel)]="tableForm.floor"></ion-input>
+          </ion-item>
+        </ion-list>
+
+        <div class="shape-choices">
+          <div class="shape-label">Table Shape</div>
+          <ion-segment [(ngModel)]="tableForm.shape" color="primary">
+            <ion-segment-button value="square">
+              <ion-icon name="square-outline"></ion-icon>
+              <ion-label>Square</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="round">
+              <ion-icon name="ellipse-outline"></ion-icon>
+              <ion-label>Round</ion-label>
+            </ion-segment-button>
+            <ion-segment-button value="rectangular">
+              <ion-icon name="remove-outline"></ion-icon>
+              <ion-label>Rectangular</ion-label>
+            </ion-segment-button>
+          </ion-segment>
+        </div>
+
+        <div class="form-actions">
+          <ion-button fill="clear" color="medium" (click)="closeTableForm()">
+            Cancel
+          </ion-button>
+          <ion-button color="primary" (click)="submitTableForm()">
+            <ion-icon slot="start" [name]="formMode === 'create' ? 'add-outline' : 'create-outline'"></ion-icon>
+            {{ formMode === 'create' ? 'Create Table' : 'Save Changes' }}
+          </ion-button>
+        </div>
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>
+
+<!-- Bulk Create Tables Modal -->
+<ion-modal [isOpen]="showBulkForm()" (didDismiss)="closeBulkForm()">
+  <ng-template>
+    <ion-header>
+      <ion-toolbar color="primary">
+        <ion-title>Bulk Create Tables</ion-title>
+        <ion-buttons slot="end">
+          <ion-button color="light" (click)="closeBulkForm()">
+            <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+          </ion-button>
+        </ion-buttons>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content class="ion-padding">
+      <h2>Paste or type your tables</h2>
+      <p>
+        Use <strong>#Section Name</strong> lines to group tables, followed by one table per line.
+        Lines starting with <strong>#</strong> set the current section; other lines are table numbers.
+      </p>
+
+      <div class="bulk-example">
+        #Main Floor
+        T1
+        T2
+        T3
+        T4
+
+        #Pool Side
+        P1
+        P2
+        P3
+        P4
+      </div>
+
+      <ion-item lines="full">
+        <ion-label position="stacked">Bulk table list</ion-label>
+        <ion-textarea
+          auto-grow="true"
+          [(ngModel)]="bulkText"
+          placeholder="#Main Floor&#10;T1&#10;T2&#10;T3&#10;T4">
+        </ion-textarea>
+      </ion-item>
+
+      <div class="form-actions">
+        <ion-button fill="clear" color="medium" (click)="closeBulkForm()">
+          Cancel
+        </ion-button>
+        <ion-button color="primary" (click)="submitBulkForm()">
+          <ion-icon slot="start" name="list-outline"></ion-icon>
+          Create Tables
+        </ion-button>
+      </div>
+    </ion-content>
+  </ng-template>
+</ion-modal>

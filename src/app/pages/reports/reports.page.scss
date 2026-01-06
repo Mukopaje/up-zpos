@@ -105,6 +105,17 @@ ion-list {
   }
 }
 
+.item-metrics {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+
+  ion-text {
+    text-align: right;
+  }
+}
+
 .loading-state {
   text-align: center;
   padding: 64px 16px;
@@ -155,5 +166,34 @@ ion-list {
 @media (min-width: 1024px) {
   .chart-container {
     height: 450px;
+  }
+}
+
+// Inventory variance summary
+.variance-summary {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ion-color-light);
+
+  .variance-stat {
+    flex: 1;
+    text-align: center;
+
+    small {
+      display: block;
+      color: var(--ion-color-medium);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: bold;
+    }
   }
 }

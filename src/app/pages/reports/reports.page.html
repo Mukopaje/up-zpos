@@ -16,6 +16,14 @@
         <ion-icon name="trending-up"></ion-icon>
         <ion-label>Sales</ion-label>
       </ion-segment-button>
+      <ion-segment-button value="items">
+        <ion-icon name="cart"></ion-icon>
+        <ion-label>Items</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="payments">
+        <ion-icon name="cash"></ion-icon>
+        <ion-label>Payments</ion-label>
+      </ion-segment-button>
       <ion-segment-button value="inventory">
         <ion-icon name="cube"></ion-icon>
         <ion-label>Inventory</ion-label>
@@ -23,6 +31,14 @@
       <ion-segment-button value="customers">
         <ion-icon name="people"></ion-icon>
         <ion-label>Customers</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="voids">
+        <ion-icon name="close-circle"></ion-icon>
+        <ion-label>Voids</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="workperiods">
+        <ion-icon name="analytics"></ion-icon>
+        <ion-label>Workperiods</ion-label>
       </ion-segment-button>
     </ion-segment>
   </ion-toolbar>
@@ -44,6 +60,27 @@
       </ion-segment-button>
       <ion-segment-button value="custom">
         <ion-icon name="calendar"></ion-icon>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+
+  <!-- Standard Filters -->
+  <ion-toolbar>
+    <ion-segment [value]="paymentFilter()" (ionChange)="paymentFilter.set($any($event.detail.value))" scrollable>
+      <ion-segment-button value="all">
+        <ion-label>All Payments</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="cash">
+        <ion-label>Cash</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="card">
+        <ion-label>Card</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="mobile">
+        <ion-label>Mobile</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="account">
+        <ion-label>Account</ion-label>
       </ion-segment-button>
     </ion-segment>
   </ion-toolbar>
@@ -257,6 +294,133 @@
             }
           </ion-card-content>
         </ion-card>
+
+        <!-- Stock Adjustments (Variance) -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Stock Adjustments</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="variance-summary">
+              <div class="variance-stat">
+                <small>Net Quantity</small>
+                <h3 [style.color]="inventoryVarianceSummary().netQuantity >= 0 ? 'green' : 'red'">
+                  {{ inventoryVarianceSummary().netQuantity > 0 ? '+' : '' }}{{ inventoryVarianceSummary().netQuantity }}
+                </h3>
+              </div>
+              <div class="variance-stat">
+                <small>Net Value</small>
+                <h3 [style.color]="inventoryVarianceSummary().netValue >= 0 ? 'green' : 'red'">
+                  {{ inventoryVarianceSummary().netValue >= 0 ? '+' : '' }}ZMW {{ inventoryVarianceSummary().netValue | number:'1.2-2' }}
+                </h3>
+              </div>
+            </div>
+
+            @if (inventoryVariance().length === 0) {
+              <ion-text color="medium">
+                <p>No adjustments recorded for this period.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of inventoryVariance(); track row.productId) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.name }}</h3>
+                      <p>
+                        Qty: {{ row.netQuantity > 0 ? '+' : '' }}{{ row.netQuantity }}
+                      </p>
+                    </ion-label>
+                    <ion-text slot="end" [color]="row.netValue >= 0 ? 'success' : 'danger'">
+                      <strong>
+                        {{ row.netValue >= 0 ? '+' : '' }}ZMW {{ row.netValue | number:'1.2-2' }}
+                      </strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+
+    <!-- Item Sales Report -->
+    @if (selectedReport() === 'items') {
+      <div class="reports-container">
+
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Item Sales</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (itemSales().length === 0) {
+              <ion-text color="medium">
+                <p>No item sales for the selected period and filters.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of itemSales(); track row.productId) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.name }}</h3>
+                      <p>
+                        Qty: {{ row.quantity }} •
+                        Avg: ZMW {{ row.avgPrice | number:'1.2-2' }}
+                      </p>
+                    </ion-label>
+                    <div slot="end" class="item-metrics">
+                      <ion-text color="primary">
+                        <strong>ZMW {{ row.revenue | number:'1.2-2' }}</strong>
+                      </ion-text>
+                      <ion-text [color]="row.margin >= 0 ? 'success' : 'danger'">
+                        <small>
+                          Margin: ZMW {{ row.margin | number:'1.2-2' }}
+                          ({{ (row.marginRate * 100) | number:'1.0-1' }}%)
+                        </small>
+                      </ion-text>
+                    </div>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+
+    <!-- Payments Report -->
+    @if (selectedReport() === 'payments') {
+      <div class="reports-container">
+
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Payment Summary</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (paymentSummary().length === 0) {
+              <ion-text color="medium">
+                <p>No payments for the selected period and filters.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of paymentSummary(); track row.type) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.type | uppercase }}</h3>
+                      <p>
+                        Payments: {{ row.paymentCount }} •
+                        Orders: {{ row.orderCount }}
+                      </p>
+                    </ion-label>
+                    <ion-text slot="end" color="primary">
+                      <strong>ZMW {{ row.totalAmount | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
       </div>
     }
 
@@ -363,6 +527,400 @@
                     </ion-label>
                     <ion-text slot="end" color="danger">
                       <strong>ZMW {{ customer.balance | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+
+    <!-- Workperiod Report -->
+    @if (selectedReport() === 'workperiods') {
+      <div class="reports-container">
+
+        <!-- Current / Selected Workperiod Summary -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Workperiod Summary</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (getSelectedWorkperiod()) {
+              <p>
+                <strong>Status:</strong>
+                <ion-badge [color]="getSelectedWorkperiod()?.status === 'open' ? 'success' : 'medium'">
+                  {{ getSelectedWorkperiod()?.status | uppercase }}
+                </ion-badge>
+              </p>
+              <p>
+                <strong>Opened by:</strong> {{ getSelectedWorkperiod()?.opened_by }}
+              </p>
+              <p>
+                <strong>Start:</strong> {{ getSelectedWorkperiod()?.start_time | date:'short' }}
+              </p>
+              @if (getSelectedWorkperiod()?.end_time) {
+                <p>
+                  <strong>End:</strong> {{ getSelectedWorkperiod()?.end_time | date:'short' }}
+                </p>
+              }
+
+              <div class="summary-grid">
+                <ion-card class="summary-card">
+                  <ion-card-content>
+                    <div class="stat">
+                      <ion-icon name="cash" color="success"></ion-icon>
+                      <div class="stat-info">
+                        <small>Total Sales</small>
+                        <h2>ZMW {{ workperiodSalesSummary().totalSales | number:'1.2-2' }}</h2>
+                      </div>
+                    </div>
+                  </ion-card-content>
+                </ion-card>
+
+                <ion-card class="summary-card">
+                  <ion-card-content>
+                    <div class="stat">
+                      <ion-icon name="cart" color="primary"></ion-icon>
+                      <div class="stat-info">
+                        <small>Orders</small>
+                        <h2>{{ workperiodSalesSummary().totalOrders }}</h2>
+                      </div>
+                    </div>
+                  </ion-card-content>
+                </ion-card>
+
+                <ion-card class="summary-card">
+                  <ion-card-content>
+                    <div class="stat">
+                      <ion-icon name="analytics" color="warning"></ion-icon>
+                      <div class="stat-info">
+                        <small>Avg Order</small>
+                        <h2>ZMW {{ workperiodSalesSummary().averageOrderValue | number:'1.2-2' }}</h2>
+                      </div>
+                    </div>
+                  </ion-card-content>
+                </ion-card>
+
+                <ion-card class="summary-card">
+                  <ion-card-content>
+                    <div class="stat">
+                      <ion-icon name="close-circle" color="danger"></ion-icon>
+                      <div class="stat-info">
+                        <small>Voided Amount</small>
+                        <h2>ZMW {{ workperiodVoidSummary().totalAmount | number:'1.2-2' }}</h2>
+                      </div>
+                    </div>
+                  </ion-card-content>
+                </ion-card>
+              </div>
+            } @else {
+              <ion-text color="medium">
+                <p>No workperiod selected. Open or select a workperiod below.</p>
+              </ion-text>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Workperiod Controls & List -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Workperiods</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div class="workperiod-controls">
+              @if (workperiodsService.currentWorkperiod()) {
+                <ion-button color="danger" (click)="onCloseWorkperiodClick()">
+                  Close Current Workperiod
+                </ion-button>
+              } @else {
+                <ion-button color="primary" (click)="onOpenWorkperiodClick()">
+                  Open New Workperiod
+                </ion-button>
+              }
+            </div>
+
+            @if (workperiodsService.recentWorkperiods().length === 0) {
+              <ion-text color="medium">
+                <p>No workperiods recorded yet.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (wp of workperiodsService.recentWorkperiods(); track wp.id) {
+                  <ion-item lines="full" (click)="selectWorkperiod(wp)">
+                    <ion-label>
+                      <h3>
+                        {{ wp.name || 'Workperiod' }}
+                        <ion-badge [color]="wp.status === 'open' ? 'success' : 'medium'" class="wp-badge">
+                          {{ wp.status | uppercase }}
+                        </ion-badge>
+                      </h3>
+                      <p>
+                        {{ wp.start_time | date:'short' }}
+                        @if (wp.end_time) {
+                          &nbsp;–&nbsp;{{ wp.end_time | date:'short' }}
+                        }
+                      </p>
+                    </ion-label>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Workperiod Payment Breakdown -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Payment Breakdown (Workperiod)</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (workperiodPaymentSummary().length === 0) {
+              <ion-text color="medium">
+                <p>No payments recorded for this workperiod.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of workperiodPaymentSummary(); track row.type) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.type | uppercase }}</h3>
+                      <p>
+                        Payments: {{ row.paymentCount }} •
+                        Orders: {{ row.orderCount }}
+                      </p>
+                    </ion-label>
+                    <ion-text slot="end" color="primary">
+                      <strong>ZMW {{ row.totalAmount | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Workperiod Void Activity -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Void Activity (Workperiod)</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (workperiodVoids().length === 0) {
+              <ion-text color="medium">
+                <p>No voids recorded for this workperiod.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (v of workperiodVoids(); track v.id) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ v.product_name }} (x{{ v.quantity }})</h3>
+                      <p>
+                        {{ v.created_by || 'Unknown' }} •
+                        {{ v.created_at | date:'short' }}
+                      </p>
+                      @if (v.reason) {
+                        <p>Reason: {{ v.reason }}</p>
+                      }
+                    </ion-label>
+                    <ion-text slot="end" color="danger">
+                      <strong>ZMW {{ v.total | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Waiter Performance -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Waiter Performance</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (waiterPerformance().length === 0) {
+              <ion-text color="medium">
+                <p>No waiter activity for this workperiod.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of waiterPerformance(); track row.waiterId) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.waiterName }}</h3>
+                      <p>
+                        Orders: {{ row.orderCount }} • Guests: {{ row.covers || 0 }}
+                      </p>
+                    </ion-label>
+                    <div slot="end" class="item-metrics">
+                      <ion-text color="primary">
+                        <strong>ZMW {{ row.totalSales | number:'1.2-2' }}</strong>
+                      </ion-text>
+                      <ion-text color="medium">
+                        <small>
+                          Avg/order: ZMW {{ row.averageOrderValue | number:'1.2-2' }}
+                          • Avg/guest: ZMW {{ row.averagePerCover | number:'1.2-2' }}
+                        </small>
+                      </ion-text>
+                    </div>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Table Performance -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Table Performance</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (tablePerformance().length === 0) {
+              <ion-text color="medium">
+                <p>No table activity for this workperiod.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of tablePerformance(); track row.tableId) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.tableLabel }}</h3>
+                      <p>
+                        Orders: {{ row.orderCount }} • Guests: {{ row.covers || 0 }}
+                      </p>
+                    </ion-label>
+                    <ion-text slot="end" color="primary">
+                      <div class="item-metrics">
+                        <ion-text color="primary">
+                          <strong>ZMW {{ row.totalSales | number:'1.2-2' }}</strong>
+                        </ion-text>
+                        <ion-text color="medium">
+                          <small>Avg/guest: ZMW {{ row.averagePerCover | number:'1.2-2' }}</small>
+                        </ion-text>
+                      </div>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+      </div>
+    }
+
+    <!-- Void Report -->
+    @if (selectedReport() === 'voids') {
+      <div class="reports-container">
+
+        <!-- Void Summary -->
+        <div class="summary-grid">
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="close-circle" color="danger"></ion-icon>
+                <div class="stat-info">
+                  <small>Total Voided Amount</small>
+                  <h2>ZMW {{ voidSummary().totalAmount | number:'1.2-2' }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="cart" color="warning"></ion-icon>
+                <div class="stat-info">
+                  <small>Voided Quantity</small>
+                  <h2>{{ voidSummary().totalQuantity }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="analytics" color="primary"></ion-icon>
+                <div class="stat-info">
+                  <small>Void Actions</small>
+                  <h2>{{ voidSummary().count }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+
+          <ion-card class="summary-card">
+            <ion-card-content>
+              <div class="stat">
+                <ion-icon name="people" color="medium"></ion-icon>
+                <div class="stat-info">
+                  <small>Staff with Voids</small>
+                  <h2>{{ voidsByUser().length }}</h2>
+                </div>
+              </div>
+            </ion-card-content>
+          </ion-card>
+        </div>
+
+        <!-- Voids by Staff -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Voids by Staff</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (voidsByUser().length === 0) {
+              <ion-text color="medium">
+                <p>No voids recorded yet.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (row of voidsByUser(); track row.createdBy) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ row.createdBy }}</h3>
+                      <p>{{ row.count }} voids</p>
+                    </ion-label>
+                    <ion-text slot="end" color="danger">
+                      <strong>ZMW {{ row.totalAmount | number:'1.2-2' }}</strong>
+                    </ion-text>
+                  </ion-item>
+                }
+              </ion-list>
+            }
+          </ion-card-content>
+        </ion-card>
+
+        <!-- Recent Void Actions -->
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Recent Voids</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            @if (voids().length === 0) {
+              <ion-text color="medium">
+                <p>No void activity to show.</p>
+              </ion-text>
+            } @else {
+              <ion-list>
+                @for (v of voids(); track v.id) {
+                  <ion-item lines="full">
+                    <ion-label>
+                      <h3>{{ v.product_name }} (x{{ v.quantity }})</h3>
+                      <p>
+                        {{ v.created_by || 'Unknown' }} •
+                        {{ v.created_at | date:'short' }}
+                      </p>
+                      @if (v.reason) {
+                        <p>Reason: {{ v.reason }}</p>
+                      }
+                    </ion-label>
+                    <ion-text slot="end" color="danger">
+                      <strong>ZMW {{ v.total | number:'1.2-2' }}</strong>
                     </ion-text>
                   </ion-item>
                 }

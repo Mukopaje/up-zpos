@@ -20,6 +20,11 @@ export interface OrderCreateData {
   customer?: Customer;
   notes?: string;
   payments?: Payment[];
+  waiterId?: string;
+  waiterName?: string;
+  tableId?: string;
+  tableNumber?: string;
+  covers?: number;
 }
 
 @Injectable({
@@ -28,6 +33,8 @@ export interface OrderCreateData {
 export class OrdersService {
   orders = signal<Order[]>([]);
   currentInvoiceNumber = signal<number>(1);
+  // Tracks the date (YYYYMMDD) for which currentInvoiceNumber applies
+  currentInvoiceDate = signal<string>('');
   invoicePrefix = signal<string>('INV');
   location = signal<string>('');
   warehouse = signal<string>('');
@@ -72,16 +79,59 @@ export class OrdersService {
    */
   private async loadLastInvoiceNumber(): Promise<void> {
     try {
+      const today = this.getTodayDateString();
+
+      // Prefer explicit counter persisted in storage (per-day)
+      const [counterDate, counterValue] = await Promise.all([
+        this.storage.get<string>('invoice_counter_date'),
+        this.storage.get<number>('invoice_counter_value')
+      ]);
+
+      if (counterDate === today && typeof counterValue === 'number' && counterValue >= 0) {
+        this.currentInvoiceDate.set(today);
+        this.currentInvoiceNumber.set(counterValue + 1);
+        return;
+      }
+
+      // Fallback: infer from last sale's order_number if available
       await this.sqlite.ensureInitialized();
       const sales = await this.sqlite.getSales(1);
 
       if (sales.length > 0) {
         const lastOrder = sales[0];
-        const match = lastOrder.order_number?.match(/\d+$/);
-        if (match) {
-          this.currentInvoiceNumber.set(parseInt(match[0], 10) + 1);
+        const orderNumber = lastOrder.order_number || '';
+
+        // Support both legacy numeric suffix and new DATE-based pattern
+        // Example new pattern: INV-20251229-0269
+        const dateSeqMatch = orderNumber.match(/(\d{8})-(\d+)$/);
+        if (dateSeqMatch) {
+          const lastDate = dateSeqMatch[1];
+          const lastSeq = parseInt(dateSeqMatch[2], 10) || 0;
+          if (lastDate === today) {
+            this.currentInvoiceDate.set(today);
+            this.currentInvoiceNumber.set(lastSeq + 1);
+            await this.storage.set('invoice_counter_date', today);
+            await this.storage.set('invoice_counter_value', lastSeq);
+            return;
+          }
+        } else {
+          const legacyMatch = orderNumber.match(/(\d+)$/);
+          if (legacyMatch) {
+            const lastSeq = parseInt(legacyMatch[1], 10) || 0;
+            this.currentInvoiceDate.set(today);
+            this.currentInvoiceNumber.set(lastSeq + 1);
+            await this.storage.set('invoice_counter_date', today);
+            await this.storage.set('invoice_counter_value', lastSeq);
+            return;
+          }
         }
       }
+
+      // Default: start sequence at 1 for today
+      this.currentInvoiceDate.set(today);
+      this.currentInvoiceNumber.set(1);
+      await this.storage.set('invoice_counter_date', today);
+      await this.storage.set('invoice_counter_value', 0);
     } catch (error) {
       console.error('Error loading last invoice:', error);
     }
@@ -92,10 +142,31 @@ export class OrdersService {
    */
   private generateInvoiceNumber(): string {
     const prefix = this.invoicePrefix();
+    const today = this.getTodayDateString();
+
+    // Reset counter when date changes
+    if (this.currentInvoiceDate() !== today) {
+      this.currentInvoiceDate.set(today);
+      this.currentInvoiceNumber.set(1);
+    }
+
     const number = this.currentInvoiceNumber();
-    const paddedNumber = number.toString().padStart(6, '0');
+    const paddedNumber = number.toString().padStart(4, '0');
     this.currentInvoiceNumber.set(number + 1);
-    return `${prefix}${paddedNumber}`;
+
+    // Format: PREFIX-YYYYMMDD-#### (e.g. INV-20251229-0269)
+    return `${prefix}-${today}-${paddedNumber}`;
+  }
+
+  /**
+   * Helper: format today's date as YYYYMMDD
+   */
+  private getTodayDateString(): string {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    return `${year}${month}${day}`;
   }
 
   /**
@@ -142,10 +213,59 @@ export class OrdersService {
         reference: p.reference,
         timestamp: p.timestamp
       })),
+      waiterId: payload.waiterId,
+      tableId: payload.tableId,
+      covers: payload.covers,
       createdBy: payload.createdBy || this.userId(),
       createdAt,
       updatedAt
     } as Order;
+  }
+
+  /**
+   * Queue an email receipt job for the given order and recipient
+   * email. This uses the offline outbox so that the request is
+   * pushed to the backend on the next sync, even if the device is
+   * currently offline.
+   */
+  async queueReceiptEmail(order: Order, email: string, businessName: string): Promise<void> {
+    if (!email || !email.trim()) {
+      return;
+    }
+
+    await this.sqlite.ensureInitialized();
+
+    const items = (order.items || []).map(item => ({
+      name: item.name || item.product?.name,
+      quantity: item.quantity ?? item.Quantity,
+      price: item.price,
+      total: item.total ?? item.itemTotalPrice
+    }));
+
+    // Get settings so we can include store contact details and currency
+    const settings = await this.storage.get<any>('app-settings');
+    const currency = settings?.currency || 'ZMW';
+    const storePhone = settings?.phone;
+    const storeEmail = settings?.email;
+    const storeAddress = settings?.address;
+
+    await this.sqlite.queueEmailReceiptJob({
+      orderId: order._id,
+      orderNumber: order.orderNumber || '',
+      to: email.trim(),
+      businessName,
+      customerName: order.customer?.name,
+      customerEmail: order.customer?.email || email.trim(),
+      customerPhone: order.customer?.phone,
+      total: order.total,
+      paymentMethod: order.paymentMethod || order.paymentOption,
+      items,
+      currency,
+      storePhone,
+      storeEmail,
+      storeAddress,
+      createdAt: new Date().toISOString()
+    });
   }
 
   /**
@@ -160,7 +280,8 @@ export class OrdersService {
     await this.sqlite.ensureInitialized();
 
     const summary = this.cart.summary();
-    const timestamp = new Date().toISOString();
+    const now = new Date();
+    const timestamp = now.toISOString();
     const orderId = `ORD_${timestamp}`;
     const invoiceNumber = this.generateInvoiceNumber();
 
@@ -177,6 +298,9 @@ export class OrdersService {
       notes: data.notes,
       customer: data.customer,
       payments: data.payments,
+      waiterId: data.waiterId,
+      tableId: data.tableId,
+      covers: data.covers,
       createdBy: this.userId(),
       location: this.location(),
       warehouse: this.warehouse()
@@ -197,6 +321,13 @@ export class OrdersService {
       };
 
       await this.sqlite.addSale(sale);
+
+      // Persist latest invoice counter for the day
+      const today = this.getTodayDateString();
+      const currentSeq = this.currentInvoiceNumber();
+      // currentInvoiceNumber holds NEXT sequence; last used is -1
+      await this.storage.set('invoice_counter_date', today);
+      await this.storage.set('invoice_counter_value', currentSeq - 1);
 
       // Update inventory in SQLite
       for (const item of cartItems) {
@@ -349,6 +480,23 @@ export class OrdersService {
         total: order.total,
         items: payload
       });
+
+      // Log void/return for reporting
+      try {
+        await this.sqlite.addVoidRecord({
+          sale_id: orderId,
+          table_id: null,
+          product_id: productId,
+          product_name: item.product.name,
+          quantity,
+          price: item.price,
+          total: returnAmount,
+          reason,
+          created_by: this.userId() || 'Unknown'
+        });
+      } catch (logError) {
+        console.error('Error recording void/return:', logError);
+      }
 
       // Return to inventory (increase stock)
       try {

@@ -21,14 +21,17 @@ export class ModifierGroupsPage implements OnInit {
   searchQuery = signal<string>('');
 
   filteredGroups = signal<ModifierGroup[]>([]);
+  private sqlite: SqliteService;
+  private productsService: ProductsService;
 
   constructor(
     private modalCtrl: ModalController,
     private alertCtrl: AlertController,
-    private toastCtrl: ToastController,
-    private sqlite: SqliteService,
-    private productsService: ProductsService
-  ) {}
+    private toastCtrl: ToastController
+  ) {
+    this.sqlite = (window as any).ng?.injector?.get?.(SqliteService) ?? (null as any);
+    this.productsService = (window as any).ng?.injector?.get?.(ProductsService) ?? (null as any);
+  }
 
   async ngOnInit() {
     await this.loadData();

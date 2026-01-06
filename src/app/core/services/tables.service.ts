@@ -13,10 +13,13 @@ export class TablesService {
   tables = signal<Table[]>([]);
   loading = signal(false);
   
-  async loadTables(terminalId?: string): Promise<void> {
+  async loadTables(terminalId?: string, location?: string): Promise<void> {
     this.loading.set(true);
     try {
-      const rows = await this.sqlite.getTables(terminalId);
+      await this.sqlite.ensureInitialized();
+      const rows = location
+        ? await this.sqlite.getTablesByLocation(location)
+        : await this.sqlite.getTables(terminalId);
       const tables = rows.map(r => this.mapRowToTable(r));
       this.tables.set(tables);
     } catch (error) {
@@ -24,6 +27,101 @@ export class TablesService {
       throw error;
     } finally {
       this.loading.set(false);
+    }
+  }
+
+  /**
+   * Ensure that a new hospitality location starts with a sensible
+   * default set of tables (T1–T16 on Main Floor). This runs only
+   * when no tables exist yet for the given location, and then
+   * reloads the tables signal for that terminal/location.
+   */
+  async ensureDefaultTablesForLocation(terminalId?: string, location?: string): Promise<void> {
+    try {
+      await this.sqlite.ensureInitialized();
+
+      // If we weren't given a clear terminal/location, try to infer
+      // a reasonable default from existing terminals so that a
+      // brand new install still gets sensible starter tables.
+      if (!terminalId || !location) {
+        const terminals = await this.sqlite.getTerminals();
+
+        if (!terminals || terminals.length === 0) {
+          // No terminals registered yet – just load whatever tables
+          // exist (likely none) and exit.
+          await this.loadTables();
+          return;
+        }
+
+        // Prefer hospitality POS terminals with a location,
+        // then any POS terminal with a location, then any terminal.
+        const preferred =
+          terminals.find((t: any) => t.terminal_type === 'pos' && t.pos_mode === 'hospitality' && t.location) ||
+          terminals.find((t: any) => t.terminal_type === 'pos' && t.location) ||
+          terminals[0];
+
+        terminalId = preferred.id;
+        location = preferred.location || 'Main Floor';
+      }
+
+      // At this point we expect a concrete terminal/location. If we
+      // still don't have them for any reason, just perform a normal
+      // load without seeding to keep the UI functional.
+      if (!terminalId || !location) {
+        await this.loadTables();
+        return;
+      }
+
+      // Check if this location already has any tables configured
+      const existing = await this.sqlite.getTablesByLocation(location);
+      if (existing.length > 0) {
+        await this.loadTables(terminalId, location);
+        return;
+      }
+
+      // Seed a simple default set: T1–T16 on Main Floor,
+      // with basic grid positions to support future floor plans.
+      const defaultNumbers = Array.from({ length: 16 }, (_, i) => `T${i + 1}`);
+
+      for (let index = 0; index < defaultNumbers.length; index++) {
+        const number = defaultNumbers[index];
+        const col = index % 4;
+        const row = Math.floor(index / 4);
+        const position = JSON.stringify({ row, col });
+
+        await this.sqlite.addTable({
+          number,
+          name: null as any,
+          capacity: 4,
+          section: 'Main Floor',
+          floor: 1,
+          status: 'free',
+          shape: 'square',
+          position: position as any,
+          session_id: undefined,
+          guest_name: undefined,
+          guest_count: undefined,
+          waiter_id: undefined,
+          waiter_name: undefined,
+          start_time: null as any,
+          order_id: undefined,
+          items: JSON.stringify([]),
+          amount: 0,
+          notes: undefined,
+          terminal_id: terminalId,
+          active: 1,
+          created_at: undefined,
+          updated_at: undefined,
+          id: undefined
+        });
+      }
+
+      // Reload tables for this location so downstream screens see them
+      await this.loadTables(terminalId, location);
+    } catch (error) {
+      console.error('Error seeding default tables for location:', error);
+      // Fall back to a normal load so the UI still works
+      await this.loadTables(terminalId, location);
     }
   }
 
@@ -180,6 +278,43 @@ export class TablesService {
       await this.waitersService.unassignTable(oldWaiterId, tableId);
     }
     await this.waitersService.assignTable(newWaiterId, tableId);
+  }
+
+  /**
+   * Move an active hospitality session (guest + items + amount)
+   * from one physical table to another. This is used when a
+   * party physically changes tables and we want the destination
+   * table to show their current order and running total.
+   */
+  async moveSessionToTable(sourceTableId: string, targetTableId: string): Promise<void> {
+    const source = await this.getTable(sourceTableId);
+    const target = await this.getTable(targetTableId);
+
+    if (!source || !target) return;
+
+    // Copy the full session state from source to target
+    target.status = 'occupied';
+    target.guestName = source.guestName;
+    target.guestCount = source.guestCount;
+    target.waiterId = source.waiterId;
+    target.waiterName = source.waiterName;
+    target.startTime = source.startTime ?? Date.now();
+    target.orderId = source.orderId;
+    target.items = [...(source.items || [])];
+    target.amount = source.amount;
+    target.notes = source.notes;
+
+    // Clear the session data from the source table but keep it
+    // logically active so that cleaning/free lifecycle can run
+    // using the normal clearTable flow, including waiter
+    // unassignment and timed transition back to free.
+    await this.updateTable(target);
+    await this.clearTable(sourceTableId);
+
+    // Ensure the waiter assignment reflects the new table
+    if (target.waiterId) {
+      await this.waitersService.assignTable(target.waiterId, targetTableId);
+    }
   }
 
   async mergeTable(sourceTableId: string, targetTableId: string): Promise<void> {

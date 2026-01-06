@@ -1,129 +1,140 @@
-<ion-header [translucent]="true">
+<ion-header>
   <ion-toolbar color="primary">
     <ion-title>User Login</ion-title>
     <ion-button slot="end" fill="clear" (click)="onLogoutLicense()">
-      <ion-icon slot="icon-only" name="log-out-outline"></ion-icon>
+      <ion-icon slot="icon-only" name="log-out-outline" color="light"></ion-icon>
     </ion-button>
   </ion-toolbar>
 </ion-header>
 
-<ion-content [fullscreen]="true" class="ion-padding">
+<ion-content class="ion-padding">
   <div class="pin-container">
-    <div class="logo-section">
-      <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
-      <h2>{{ businessName() }}</h2>
-      <p>Enter your PIN to continue</p>
-    </div>
+    <div class="pin-layout">
+      <!-- Left column: logo & business info -->
+      <div class="left-panel">
+        <div class="logo-section">
+          <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
+          <div class="license-block">
+            <span class="license-label">Licensed to:</span>
+            <h2 class="company-name">{{ businessName() }}</h2>
+          </div>
+          <p>Enter your PIN to continue</p>
+        </div>
+      </div>
 
-    <ion-card class="pin-card">
-      <ion-card-header>
-        <ion-card-title class="ion-text-center">Enter PIN</ion-card-title>
-      </ion-card-header>
+      <!-- Right column: PIN card & numpad -->
+      <div class="right-panel">
+        <ion-card class="pin-card">
+          <ion-card-header>
+            <ion-card-title class="ion-text-center">Enter PIN</ion-card-title>
+          </ion-card-header>
 
-      <ion-card-content>
-        <!-- PIN Display -->
-        <div class="pin-display">
-          <ion-text color="primary">
-            <h1>{{ displayPin() || '••••' }}</h1>
+          <ion-card-content>
+            <!-- PIN Display -->
+            <div class="pin-display">
+              <ion-text color="primary">
+                <h1>{{ displayPin() || '' }}</h1>
+              </ion-text>
+            </div>
+
+            <!-- Numeric Keypad -->
+            <ion-grid class="keypad">
+              <ion-row>
+                <ion-col size="4" *ngFor="let num of ['1', '2', '3']">
+                  <ion-button 
+                    expand="block" 
+                    size="large"
+                    color="primary"
+                    (click)="onNumberClick(num)"
+                    [disabled]="isLoading()"
+                  >
+                    {{ num }}
+                  </ion-button>
+                </ion-col>
+              </ion-row>
+              <ion-row>
+                <ion-col size="4" *ngFor="let num of ['4', '5', '6']">
+                  <ion-button 
+                    expand="block" 
+                    size="large"
+                    color="primary"
+                    (click)="onNumberClick(num)"
+                    [disabled]="isLoading()"
+                  >
+                    {{ num }}
+                  </ion-button>
+                </ion-col>
+              </ion-row>
+              <ion-row>
+                <ion-col size="4" *ngFor="let num of ['7', '8', '9']">
+                  <ion-button 
+                    expand="block" 
+                    size="large"
+                    color="primary"
+                    (click)="onNumberClick(num)"
+                    [disabled]="isLoading()"
+                  >
+                    {{ num }}
+                  </ion-button>
+                </ion-col>
+              </ion-row>
+              <ion-row>
+                <ion-col size="4">
+                  <ion-button 
+                    expand="block" 
+                    size="large"
+                    color="danger"
+                    (click)="onClear()"
+                    [disabled]="isLoading()"
+                  >
+                    C
+                  </ion-button>
+                </ion-col>
+                <ion-col size="4">
+                  <ion-button 
+                    expand="block" 
+                    size="large"
+                    color="primary"
+                    (click)="onNumberClick('0')"
+                    [disabled]="isLoading()"
+                  >
+                    0
+                  </ion-button>
+                </ion-col>
+                <ion-col size="4">
+                  <ion-button 
+                    expand="block" 
+                    size="large"
+                    color="medium"
+                    (click)="onBackspace()"
+                    [disabled]="isLoading()"
+                  >
+                    <ion-icon slot="icon-only" name="backspace-outline"></ion-icon>
+                  </ion-button>
+                </ion-col>
+              </ion-row>
+            </ion-grid>
+
+            <!-- Submit Button -->
+            <ion-button
+              expand="block"
+              size="large"
+              color="primary"
+              class="ion-margin-top submit-btn"
+              (click)="onSubmit()"
+              [disabled]="pin().length < 4 || isLoading()"
+            >
+              {{ isLoading() ? 'Logging in...' : 'Enter' }}
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+
+        <div class="help-text ion-margin-top">
+          <ion-text color="medium">
+            <small>Contact your administrator if you forgot your PIN</small>
           </ion-text>
         </div>
-
-        <!-- Numeric Keypad -->
-        <ion-grid class="keypad">
-          <ion-row>
-            <ion-col size="4" *ngFor="let num of ['1', '2', '3']">
-              <ion-button 
-                expand="block" 
-                size="large"
-                color="primary"
-                (click)="onNumberClick(num)"
-                [disabled]="isLoading()"
-              >
-                {{ num }}
-              </ion-button>
-            </ion-col>
-          </ion-row>
-          <ion-row>
-            <ion-col size="4" *ngFor="let num of ['4', '5', '6']">
-              <ion-button 
-                expand="block" 
-                size="large"
-                color="primary"
-                (click)="onNumberClick(num)"
-                [disabled]="isLoading()"
-              >
-                {{ num }}
-              </ion-button>
-            </ion-col>
-          </ion-row>
-          <ion-row>
-            <ion-col size="4" *ngFor="let num of ['7', '8', '9']">
-              <ion-button 
-                expand="block" 
-                size="large"
-                color="primary"
-                (click)="onNumberClick(num)"
-                [disabled]="isLoading()"
-              >
-                {{ num }}
-              </ion-button>
-            </ion-col>
-          </ion-row>
-          <ion-row>
-            <ion-col size="4">
-              <ion-button 
-                expand="block" 
-                size="large"
-                color="danger"
-                (click)="onClear()"
-                [disabled]="isLoading()"
-              >
-                C
-              </ion-button>
-            </ion-col>
-            <ion-col size="4">
-              <ion-button 
-                expand="block" 
-                size="large"
-                color="primary"
-                (click)="onNumberClick('0')"
-                [disabled]="isLoading()"
-              >
-                0
-              </ion-button>
-            </ion-col>
-            <ion-col size="4">
-              <ion-button 
-                expand="block" 
-                size="large"
-                color="medium"
-                (click)="onBackspace()"
-                [disabled]="isLoading()"
-              >
-                <ion-icon slot="icon-only" name="backspace-outline"></ion-icon>
-              </ion-button>
-            </ion-col>
-          </ion-row>
-        </ion-grid>
-
-        <!-- Submit Button -->
-        <ion-button
-          expand="block"
-          size="large"
-          color="primary"
-          class="ion-margin-top submit-btn"
-          (click)="onSubmit()"
-          [disabled]="pin().length < 4 || isLoading()"
-        >
-          {{ isLoading() ? 'Logging in...' : 'Enter' }}
-        </ion-button>
-      </ion-card-content>
-    </ion-card>
-
-    <div class="help-text ion-margin-top">
-      <ion-text color="medium">
-        <small>Contact your administrator if you forgot your PIN</small>
-      </ion-text>
+      </div>
     </div>
   </div>
 </ion-content>

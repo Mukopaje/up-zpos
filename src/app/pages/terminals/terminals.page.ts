@@ -10,7 +10,7 @@ import {
   IonSelectOption
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
-import { add, create, trash, desktop, power, wifi } from 'ionicons/icons';
+import { add, addOutline, create, trash, desktop, power, wifi } from 'ionicons/icons';
 import { Terminal } from '../../models';
 import { TerminalsService } from '../../core/services/terminals.service';
 
@@ -50,7 +50,15 @@ export class TerminalsPage implements OnInit {
     private alertCtrl: AlertController,
     private toastCtrl: ToastController
   ) {
-    addIcons({ add, create, trash, desktop, power, wifi });
+    addIcons({
+      add,
+      create,
+      trash,
+      desktop,
+      power,
+      wifi,
+      'add-outline': addOutline
+    });
   }
 
   ngOnInit() {
@@ -153,6 +161,12 @@ export class TerminalsPage implements OnInit {
           type: 'text',
           placeholder: 'Location',
           value: terminal.location
+        },
+        {
+          name: 'floorPlanImageUrl',
+          type: 'text',
+          placeholder: 'Floor plan image URL (optional)',
+          value: (terminal.hospitalityConfig as any)?.floorPlan?.backgroundImageUrl || ''
         }
       ],
       buttons: [
@@ -160,11 +174,35 @@ export class TerminalsPage implements OnInit {
         {
           text: 'Save',
           handler: async (data) => {
+            let hospitalityConfig: Terminal['hospitalityConfig'] | undefined = terminal.hospitalityConfig;
+
+            if (data.floorPlanImageUrl) {
+              const existingPlan: any = (hospitalityConfig as any)?.floorPlan || {};
+              const baseConfig: any =
+                (hospitalityConfig as any) || {
+                  type: 'restaurant',
+                  enableTableManagement: true,
+                  enableWaiterAssignment: true,
+                  enableCourseTiming: false,
+                  assignedArea: (terminal.hospitalityConfig as any)?.assignedArea || 'Main Floor',
+                  printers: (terminal.hospitalityConfig as any)?.printers || {}
+                };
+
+              hospitalityConfig = {
+                ...baseConfig,
+                floorPlan: {
+                  ...existingPlan,
+                  backgroundImageUrl: data.floorPlanImageUrl
+                }
+              };
+            }
+
             const updated = {
               ...terminal,
               name: data.name,
               code: data.code.toUpperCase(),
-              location: data.location
+              location: data.location,
+              hospitalityConfig
             };
 
             try {

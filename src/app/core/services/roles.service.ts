@@ -138,6 +138,9 @@ export class RolesService {
   async loadRoles(): Promise<void> {
     this.loading.set(true);
     try {
+      // Ensure SQLite is fully initialized before accessing the roles table
+      await this.sqlite.ensureInitialized();
+
       const rows = await this.sqlite.getRoles();
 
       if (!rows || rows.length === 0) {
@@ -168,6 +171,7 @@ export class RolesService {
 
   async getRole(id: string): Promise<Role | undefined> {
     try {
+      await this.sqlite.ensureInitialized();
       const row = await this.sqlite.getRoleById(id);
       return row ? this.mapRowToRole(row) : undefined;
     } catch (error) {
@@ -185,6 +189,7 @@ export class RolesService {
     };
     
     try {
+      await this.sqlite.ensureInitialized();
       await this.sqlite.addRole(this.mapRoleToRow(newRole));
       await this.loadRoles();
       return newRole;
@@ -201,6 +206,7 @@ export class RolesService {
         updatedAt: Date.now()
       };
 
+      await this.sqlite.ensureInitialized();
       await this.sqlite.updateRole(updated._id, this.mapRoleToRow(updated));
       await this.loadRoles();
     } catch (error) {
@@ -211,6 +217,7 @@ export class RolesService {
 
   async deleteRole(id: string): Promise<void> {
     try {
+      await this.sqlite.ensureInitialized();
       await this.sqlite.deleteRole(id);
       await this.loadRoles();
     } catch (error) {

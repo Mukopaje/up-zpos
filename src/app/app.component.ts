@@ -43,7 +43,7 @@ import {
   bagHandleOutline,
   chevronBackOutline,
   chevronForwardOutline,
-  listOutline
+  pricetagOutline
 } from 'ionicons/icons';
 import { filter } from 'rxjs/operators';
 
@@ -51,6 +51,7 @@ import { StorageService } from './core/services/storage.service';
 import { AuthService } from './core/services/auth.service';
 import { SettingsService } from './core/services/settings.service';
 import { InitDataService } from './core/services/init-data.service';
+import { PrintJobsClientService } from './core/services/print-jobs-client.service';
 
 @Component({
   selector: 'app-root',
@@ -86,13 +87,22 @@ export class AppComponent implements OnInit {
   private initDataService = inject(InitDataService);
   private alertCtrl = inject(AlertController);
   private menuCtrl = inject(MenuController);
+  private printJobsClient = inject(PrintJobsClientService);
 
   // Signals
   menuCollapsed = signal(false);
   currentRoute = signal('');
+  // Hide menu completely on auth/onboarding routes and whenever user is not logged in
+  isMenuCompletelyHidden = computed(() => {
+    const routeHidden = this.menuHiddenRoutes.some(route => this.currentRoute().startsWith(route));
+    const notLoggedIn = !this.authService.isLoggedIn();
+    return notLoggedIn || routeHidden;
+  });
   
-  // Auto-hide menu in POS routes (and checkout)
-  private posRoutes = ['/pos', '/pos-retail', '/pos-category', '/pos-hospitality', '/checkout'];
+  // Auto-hide menu in POS routes
+  private posRoutes = ['/pos', '/pos-retail', '/pos-category', '/pos-hospitality'];
+  // Fully hide menu in specific routes where it is not useful
+  private menuHiddenRoutes = ['/onboarding', '/login', '/register', '/data-loader', '/license-login', '/pin-login', '/checkout'];
 
   // Computed - Filter menu by permissions
   public menuSections = computed(() => {
@@ -110,7 +120,6 @@ export class AppComponent implements OnInit {
         permission: 'products',
         items: [
           { title: 'Products', url: '/products-management', icon: 'cube-outline', permission: 'products' },
-          { title: 'Categories', url: '/categories', icon: 'layers-outline', permission: 'products' },
           { title: 'Modifier Groups', url: '/modifier-groups', icon: 'layers-outline', permission: 'products' },
           { title: 'Inventory', url: '/inventory', icon: 'layers-outline', permission: 'inventory' },
         ]
@@ -120,6 +129,7 @@ export class AppComponent implements OnInit {
         permission: 'customers',
         items: [
           { title: 'Customers', url: '/customers', icon: 'people-outline', permission: 'customers' },
+          { title: 'Accounts', url: '/accounts', icon: 'wallet-outline', permission: 'customers' },
         ]
       },
       {
@@ -143,8 +153,11 @@ export class AppComponent implements OnInit {
         items: [
           { title: 'Settings', url: '/settings', icon: 'settings-outline', permission: 'settings' },
           { title: 'Printer Settings', url: '/printer-settings', icon: 'print-outline', permission: 'settings' },
+          { title: 'Locations', url: '/locations', icon: 'location-outline', permission: 'settings' },
+          { title: 'Promotions', url: '/promotions', icon: 'pricetag-outline', permission: 'settings' },
           { title: 'Roles', url: '/roles', icon: 'shield-outline', permission: 'roles' },
           { title: 'Users', url: '/users', icon: 'person-outline', permission: 'users' },
+          { title: 'Menus', url: '/menus', icon: 'restaurant-outline', permission: 'settings' },
           { title: 'Terminals', url: '/terminals', icon: 'desktop-outline', permission: 'terminals' },
         ]
       },
@@ -164,6 +177,7 @@ export class AppComponent implements OnInit {
     this.initializeApp();
     this.registerIcons();
     this.setupRouteListener();
+    this.startPrintJobsPolling();
   }
   async ngOnInit() {
     await this.initDataService.initializeDefaultData();
@@ -176,10 +190,22 @@ export class AppComponent implements OnInit {
     this.router.events
       .pipe(filter(event => event instanceof NavigationEnd))
       .subscribe((event: any) => {
-        this.currentRoute.set(event.url);
-        
+        const url = event.url;
+        this.currentRoute.set(url);
+
+        // Routes where the menu should be completely hidden/disabled
+        if (this.menuHiddenRoutes.some(route => url.startsWith(route))) {
+          this.menuCollapsed.set(true);
+          this.menuCtrl.enable(false);
+          this.menuCtrl.close();
+          return;
+        }
+
+        // For all other routes, ensure the menu is enabled
+        this.menuCtrl.enable(true);
+
         // Start menu collapsed in POS routes but keep it enabled
-        if (this.posRoutes.some(route => event.url.startsWith(route))) {
+        if (this.posRoutes.some(route => url.startsWith(route))) {
           this.menuCollapsed.set(true);
           this.menuCtrl.close();
           // Keep menu enabled so it can be opened
@@ -211,8 +237,28 @@ export class AppComponent implements OnInit {
       'barcode-outline': bagHandleOutline,
       'chevron-back-outline': chevronBackOutline,
       'chevron-forward-outline': chevronForwardOutline,
-      'list-outline': listOutline
+      'pricetag-outline': pricetagOutline
     });
+  }
+
+  private printJobsIntervalId: any;
+
+  private startPrintJobsPolling() {
+    if (this.printJobsIntervalId) {
+      return;
+    }
+
+    // Poll periodically and only process jobs when in a POS route
+    this.printJobsIntervalId = setInterval(async () => {
+      try {
+        const current = this.currentRoute();
+        if (this.posRoutes.some(route => current.startsWith(route))) {
+          await this.printJobsClient.processPendingJobsOnce(5);
+        }
+      } catch (error) {
+        console.error('Error processing print jobs:', error);
+      }
+    }, 15000);
   }
 
   private async initializeApp() {
@@ -267,15 +313,6 @@ export class AppComponent implements OnInit {
   }
 
   toggleMenu() {
-    const url = this.router.url;
-
-    // Keep menu closed on checkout page
-    if (url.startsWith('/checkout')) {
-      this.menuCollapsed.set(true);
-      this.menuCtrl.close();
-      return;
-    }
-
     this.menuCollapsed.update(val => !val);
   }
 

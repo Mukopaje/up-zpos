@@ -8,9 +8,14 @@
       <ion-button slot="start" fill="clear" (click)="backToProducts()">
         <ion-icon name="arrow-back"></ion-icon>
       </ion-button>
-      <ion-title>Cart & Checkout</ion-title>
+      <ion-title>Cart</ion-title>
     } @else {
       <ion-title>Point of Sale</ion-title>
+      @if (!isMobile()) {
+        <ion-button slot="end" fill="clear" (click)="toggleKeypad()">
+          <ion-icon name="keypad-outline"></ion-icon>
+        </ion-button>
+      }
       <ion-button slot="end" fill="clear" (click)="scanBarcode()" [disabled]="isScanning()">
         @if (isScanning()) {
           <ion-spinner name="crescent"></ion-spinner>
@@ -92,6 +97,39 @@
           <p>Loading products...</p>
         </div>
       </div>
+
+      <!-- On-screen numpad for desktop touch screens -->
+      <div class="numpad-container" *ngIf="!isLoading() && !isMobile() && showKeypad()">
+        <div class="numpad-display">
+          {{ keypadDisplay() }}
+        </div>
+        <div class="numpad-grid">
+          <div class="numpad-row">
+            <button type="button" class="numpad-key" (click)="onKeypadPress('1')">1</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('2')">2</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('3')">3</button>
+          </div>
+          <div class="numpad-row">
+            <button type="button" class="numpad-key" (click)="onKeypadPress('4')">4</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('5')">5</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('6')">6</button>
+          </div>
+          <div class="numpad-row">
+            <button type="button" class="numpad-key" (click)="onKeypadPress('7')">7</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('8')">8</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('9')">9</button>
+          </div>
+          <div class="numpad-row">
+            <button type="button" class="numpad-key" (click)="onKeypadPress('.')">.</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('0')">0</button>
+            <button type="button" class="numpad-key" (click)="onKeypadPress('backspace')">⌫</button>
+          </div>
+          <div class="numpad-row">
+            <button type="button" class="numpad-key action" (click)="onKeypadPress('clear')">Clear</button>
+            <button type="button" class="numpad-key action" (click)="onKeypadPress('ok')">Search</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Right: Cart & Checkout (visible on desktop, or when cart view on mobile) -->
@@ -152,6 +190,7 @@
               <div class="empty-cart">
                 <ion-icon name="cart" color="medium"></ion-icon>
                 <p>Cart is empty</p>
+                <p class="shortcuts">F1: Search | F2: Checkout | F3: Hold | F4: Recall</p>
               </div>
             } @else {
               <ion-list class="cart-list">
@@ -174,6 +213,9 @@
                       <div class="item-total">
                         <strong>ZMW {{ item.total | number:'1.2-2' }}</strong>
                       </div>
+                      <ion-button size="small" fill="clear" color="danger" (click)="removeFromCart(item)">
+                        <ion-icon name="trash" slot="icon-only"></ion-icon>
+                      </ion-button>
                     </div>
                   </div>
                 </ion-item>
@@ -211,157 +253,37 @@
             </ion-card-content>
           </ion-card>
 
-          <!-- Payment Section -->
-          <ion-card class="payment-card">
-            <ion-card-header>
-              <ion-card-title>Payment</ion-card-title>
-            </ion-card-header>
-            <ion-card-content>
-              
-              <!-- Payment Type Selector -->
-              <ion-segment [value]="paymentType()" (ionChange)="selectPaymentType($any($event.detail.value))">
-                <ion-segment-button value="cash">
-                  <ion-icon name="cash"></ion-icon>
-                  <ion-label>Cash</ion-label>
-                </ion-segment-button>
-                <ion-segment-button value="card">
-                  <ion-icon name="card"></ion-icon>
-                  <ion-label>Card</ion-label>
-                </ion-segment-button>
-                <ion-segment-button value="mobile">
-                  <ion-icon name="phone-portrait"></ion-icon>
-                  <ion-label>Mobile</ion-label>
-                </ion-segment-button>
-                <ion-segment-button value="credit" [disabled]="!selectedCustomer()">
-                  <ion-icon name="person"></ion-icon>
-                  <ion-label>Credit</ion-label>
-                </ion-segment-button>
-              </ion-segment>
+          <!-- Unified checkout: forward to shared Checkout screen -->
+          <ion-button
+            expand="block"
+            size="large"
+            color="primary"
+            (click)="goToCheckout()"
+            class="checkout-button"
+          >
+            <ion-icon name="checkmark" slot="start"></ion-icon>
+            Proceed to Checkout
+          </ion-button>
 
-              <!-- Cash Payment -->
-              @if (paymentType() === 'cash') {
-                <div class="payment-input">
-                  <ion-item>
-                    <ion-label position="stacked">Cash Received</ion-label>
-                    <ion-input
-                      type="number"
-                      [(ngModel)]="cashReceived"
-                      (ionChange)="calculateTotal()"
-                      placeholder="0.00"
-                    ></ion-input>
-                  </ion-item>
+          <!-- Hold / Recall actions for high-volume retail -->
+          <ion-button
+            expand="block"
+            fill="outline"
+            (click)="holdTransaction()"
+            class="hold-button"
+          >
+            <ion-icon name="pause-outline" slot="start"></ion-icon>
+            Hold (F3)
+          </ion-button>
 
-                  <div class="quick-amounts">
-                    <ion-button size="small" fill="outline" (click)="setQuickCash(cartSummary().total)">
-                      Exact
-                    </ion-button>
-                    <ion-button size="small" fill="outline" (click)="setQuickCash(50)">
-                      50
-                    </ion-button>
-                    <ion-button size="small" fill="outline" (click)="setQuickCash(100)">
-                      100
-                    </ion-button>
-                    <ion-button size="small" fill="outline" (click)="setQuickCash(200)">
-                      200
-                    </ion-button>
-                  </div>
-
-                  @if (change() > 0) {
-                    <ion-text color="success">
-                      <div class="change-display">
-                        <strong>Change: ZMW {{ change() | number:'1.2-2' }}</strong>
-                      </div>
-                    </ion-text>
-                  }
-                </div>
-              }
-
-              <!-- Card Payment -->
-              @if (paymentType() === 'card') {
-                <div class="payment-input">
-                  <ion-item>
-                    <ion-label position="stacked">Card Amount</ion-label>
-                    <ion-input
-                      type="number"
-                      [(ngModel)]="cardAmount"
-                      (ionChange)="calculateTotal()"
-                      placeholder="0.00"
-                    ></ion-input>
-                  </ion-item>
-                </div>
-              }
-
-              <!-- Mobile Payment -->
-              @if (paymentType() === 'mobile') {
-                <div class="payment-input">
-                  <ion-item>
-                    <ion-label position="stacked">Mobile Amount</ion-label>
-                    <ion-input
-                      type="number"
-                      [(ngModel)]="mobileAmount"
-                      (ionChange)="calculateTotal()"
-                      placeholder="0.00"
-                    ></ion-input>
-                  </ion-item>
-                </div>
-              }
-
-              <!-- Credit Payment -->
-              @if (paymentType() === 'credit') {
-                <div class="credit-info">
-                  @if (selectedCustomer()) {
-                    <ion-text>
-                      <p>Amount will be added to customer account</p>
-                      <p><strong>Current Balance:</strong> ZMW {{ selectedCustomer()!.balance | number:'1.2-2' }}</p>
-                      <p><strong>New Balance:</strong> ZMW {{ (selectedCustomer()!.balance + cartSummary().total) | number:'1.2-2' }}</p>
-                    </ion-text>
-                  } @else {
-                    <ion-text color="warning">
-                      <p>Please select a customer for credit payment</p>
-                    </ion-text>
-                  }
-                </div>
-              }
-
-              <!-- Notes -->
-              <ion-item>
-                <ion-label position="stacked">Notes (Optional)</ion-label>
-                <ion-input
-                  [(ngModel)]="notes"
-                  placeholder="Add notes..."
-                ></ion-input>
-              </ion-item>
-
-              <!-- Process Payment Button -->
-              <ion-button
-                expand="block"
-                size="large"
-                color="success"
-                [disabled]="insufficientPayment()"
-                (click)="processPayment()"
-                class="checkout-button"
-              >
-                <ion-icon name="checkmark" slot="start"></ion-icon>
-                @if (paymentType() === 'credit') {
-                  Complete Order
-                } @else {
-                  Process Payment
-                }
-              </ion-button>
-
-              @if (insufficientPayment()) {
-                <ion-text color="danger">
-                  <p class="error-text">
-                    @if (paymentType() === 'credit') {
-                      Insufficient credit limit
-                    } @else {
-                      Insufficient payment amount
-                    }
-                  </p>
-                </ion-text>
-              }
-            </ion-card-content>
-          </ion-card>
+          <ion-button
+            expand="block"
+            fill="clear"
+            (click)="loadHeldTransactions()"
+            class="recall-button"
+          >
+            View Held (F4)
+          </ion-button>
         }
       </div>
     </ion-content>
@@ -375,5 +297,37 @@
         <ion-badge color="danger" class="cart-badge">{{ cartSummary().itemCount }}</ion-badge>
       </ion-fab-button>
     </ion-fab>
+  }
+
+  <!-- Held Transactions Modal -->
+  @if (showHeldTransactions()) {
+    <div class="modal-overlay" (click)="showHeldTransactions.set(false)">
+      <div class="held-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Held Transactions</h2>
+          <ion-button fill="clear" (click)="showHeldTransactions.set(false)">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
+
+        <div class="modal-content">
+          @if (heldTransactions().length === 0) {
+            <p class="empty-message">No held transactions</p>
+          } @else {
+            <ion-list>
+              <ion-item button *ngFor="let held of heldTransactions()" (click)="recallTransaction(held)">
+                <ion-label>
+                  <h2>{{ held.items.length }} items</h2>
+                  <p>{{ held.heldAt | date:'short' }}</p>
+                </ion-label>
+                <div slot="end">
+                  <strong>ZMW {{ held.total | number:'1.2-2' }}</strong>
+                </div>
+              </ion-item>
+            </ion-list>
+          }
+        </div>
+      </div>
+    </div>
   }
 </ion-content>

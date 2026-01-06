@@ -1,8 +1,8 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { StorageService } from './storage.service';
-import { SqliteService, Product as SqlProduct, Category as SqlCategory } from './sqlite.service';
-import { Product, Category, ItemInv } from '../../models';
+import { SqliteService, Product as SqlProduct, Category as SqlCategory, MenuRow } from './sqlite.service';
+import { Product, Category, ItemInv, Menu } from '../../models';
 
 interface Department {
   _id: string;
@@ -22,6 +22,7 @@ export class ProductsService {
   // Reactive state with signals
   products = signal<Product[]>([]);
   categories = signal<Category[]>([]);
+  menus = signal<Menu[]>([]);
   departments = signal<Department[]>([]);
   isLoading = signal<boolean>(false);
 
@@ -57,6 +58,7 @@ export class ProductsService {
     await this.sqlite.ensureInitialized();
     await this.loadProducts();
     await this.loadCategories();
+    await this.loadMenus();
     await this.loadDepartments();
   }
 
@@ -116,6 +118,8 @@ export class ProductsService {
       icon: row.icon || '',
       color: row.color || '',
       imageUrl: row.image_url || '',
+      menuId: row.menu_id || undefined,
+      parentId: row.parent_id || undefined,
       order: row.sort_order ?? 0,
       active: row.active !== 0,
       createdAt,
@@ -123,6 +127,22 @@ export class ProductsService {
     };
   }
 
+  private mapSqlMenuToApp(row: MenuRow): Menu {
+    const createdAt = row.created_at ? Date.parse(row.created_at) : Date.now();
+    const updatedAt = row.updated_at ? Date.parse(row.updated_at) : createdAt;
+
+    return {
+      _id: row.id || '',
+      type: 'menu',
+      name: row.name,
+      description: row.description || '',
+      color: row.color || undefined,
+      order: row.sort_order ?? 0,
+      active: row.active !== 0,
+      createdAt,
+      updatedAt
+    };
+  }
   /**
    * Load all products from database
    */
@@ -336,6 +356,22 @@ export class ProductsService {
   }
 
   /**
+   * Load all menus from database
+   */
+  async loadMenus(): Promise<Menu[]> {
+    try {
+      await this.sqlite.ensureInitialized();
+      const rows = await this.sqlite.getMenus();
+      const mapped = rows.map((row: MenuRow) => this.mapSqlMenuToApp(row));
+      this.menus.set(mapped);
+      return mapped;
+    } catch (error) {
+      console.error('Error loading menus:', error);
+      return [];
+    }
+  }
+
+  /**
    * Get category by ID
    */
   async getCategory(id: string): Promise<Category | null> {
@@ -356,7 +392,9 @@ export class ProductsService {
   async createCategory(
     name: string,
     description: string = '',
-    imageBase64: string = ''
+    imageBase64: string = '',
+    parentId?: string,
+    menuId?: string
   ): Promise<Category | null> {
     try {
       await this.sqlite.ensureInitialized();
@@ -366,7 +404,9 @@ export class ProductsService {
         description,
         color: undefined,
         icon: undefined,
-        image_url: imageBase64 || ''
+        image_url: imageBase64 || '',
+        parent_id: parentId,
+        menu_id: menuId
       };
 
       const id = await this.sqlite.addCategory(sqlCategory);
@@ -389,7 +429,9 @@ export class ProductsService {
     id: string,
     name: string,
     description: string = '',
-    imageBase64: string = ''
+    imageBase64: string = '',
+    parentId?: string,
+    menuId?: string
   ): Promise<Category | null> {
     try {
       await this.sqlite.ensureInitialized();
@@ -397,7 +439,9 @@ export class ProductsService {
       const sqlUpdates: Partial<SqlCategory> = {
         name,
         description,
-        image_url: imageBase64 || undefined
+        image_url: imageBase64 || undefined,
+        parent_id: parentId,
+        menu_id: menuId
       };
 
       await this.sqlite.updateCategory(id, sqlUpdates);
@@ -607,6 +651,51 @@ export class ProductsService {
     } catch (error) {
       console.error('Error reducing quantity:', error);
       return false;
+    }
+  }
+  /**
+   * Menu helpers
+   */
+  async createMenu(name: string, description: string = '', color?: string): Promise<void> {
+    try {
+      await this.sqlite.ensureInitialized();
+
+      const menu: MenuRow = {
+        id: '',
+        name,
+        description,
+        color,
+        sort_order: undefined,
+        active: 1
+      };
+
+      await this.sqlite.addMenu(menu);
+      await this.loadMenus();
+    } catch (error) {
+      console.error('Error creating menu:', error);
+      throw error;
+    }
+  }
+
+  async updateMenu(id: string, updates: { name?: string; description?: string; color?: string; active?: number; sort_order?: number }): Promise<void> {
+    try {
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.updateMenu(id, updates);
+      await this.loadMenus();
+    } catch (error) {
+      console.error('Error updating menu:', error);
+      throw error;
+    }
+  }
+
+  async deleteMenu(id: string): Promise<void> {
+    try {
+      await this.sqlite.ensureInitialized();
+      await this.sqlite.deleteMenu(id);
+      await this.loadMenus();
+    } catch (error) {
+      console.error('Error deleting menu:', error);
+      throw error;
     }
   }
 }

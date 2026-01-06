@@ -1,12 +1,13 @@
 <ion-header>
-  <ion-toolbar>
+  <ion-toolbar color="primary">
     <ion-buttons slot="start">
       <ion-menu-button></ion-menu-button>
     </ion-buttons>
     <ion-title>Terminals</ion-title>
     <ion-buttons slot="end">
-      <ion-button (click)="createTerminal()">
-        <ion-icon slot="icon-only" name="add"></ion-icon>
+      <ion-button fill="clear" color="light" (click)="createTerminal()">
+        <ion-icon slot="start" name="add-outline"></ion-icon>
+        <ion-label>New Terminal</ion-label>
       </ion-button>
     </ion-buttons>
   </ion-toolbar>
@@ -132,8 +133,8 @@
           <ion-icon name="desktop"></ion-icon>
           <h2>No Terminals Registered</h2>
           <p>Register your first terminal to get started</p>
-          <ion-button (click)="createTerminal()">
-            <ion-icon slot="start" name="add"></ion-icon>
+          <ion-button color="primary" (click)="createTerminal()">
+            <ion-icon slot="start" name="add-outline"></ion-icon>
             Register Terminal
           </ion-button>
         </div>

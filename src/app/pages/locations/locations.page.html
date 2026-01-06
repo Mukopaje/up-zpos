@@ -1,0 +1,77 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Locations</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  @if (loading()) {
+    <div class="loading-container">
+      <ion-spinner></ion-spinner>
+    </div>
+  } @else {
+    <div class="locations-container">
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>
+            <ion-icon name="location-outline"></ion-icon>
+            Current Location
+          </ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          @if (locations().length > 0) {
+            <ion-list>
+              @for (loc of locations(); track loc.id) {
+                <ion-item button (click)="setCurrentLocation(loc.id)">
+                  <ion-label>
+                    <h2>{{ getLocationLabel(loc) }}</h2>
+                    <p>{{ loc.terminalCount }} terminal{{ loc.terminalCount === 1 ? '' : 's' }} - {{ loc.activeTerminals }} active</p>
+                  </ion-label>
+                  @if (isCurrentLocation(loc.id)) {
+                    <ion-badge color="success" slot="end">
+                      <ion-icon name="checkmark-circle-outline"></ion-icon>
+                      Active
+                    </ion-badge>
+                  }
+                </ion-item>
+              }
+            </ion-list>
+          } @else {
+            <p>No locations found. Add terminals with a location to get started.</p>
+          }
+        </ion-card-content>
+      </ion-card>
+
+      <ion-card>
+        <ion-card-header>
+          <ion-card-title>
+            <ion-icon name="desktop-outline"></ion-icon>
+            Terminals by Location
+          </ion-card-title>
+        </ion-card-header>
+        <ion-card-content>
+          @if (terminals().length > 0) {
+            <ion-list>
+              @for (terminal of terminals(); track terminal._id) {
+                <ion-item>
+                  <ion-label>
+                    <h2>{{ terminal.name }}</h2>
+                    <p>{{ terminal.code }} - {{ terminal.location || 'Unassigned' }}</p>
+                  </ion-label>
+                  @if (terminal.location && isCurrentLocation(terminal.location)) {
+                    <ion-badge color="primary" slot="end">Current Location</ion-badge>
+                  }
+                </ion-item>
+              }
+            </ion-list>
+          } @else {
+            <p>No terminals registered yet.</p>
+          }
+        </ion-card-content>
+      </ion-card>
+    </div>
+  }
+</ion-content>

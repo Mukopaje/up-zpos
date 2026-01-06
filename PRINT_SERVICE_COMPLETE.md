@@ -192,27 +192,35 @@ const connected = this.printService.isConnected();
 const printing = this.printService.isPrinting();
 ```
 
-## 🚀 Next Steps
+## 🚀 Next Steps (Printers)
 
-### Optional Enhancements
-1. **Error Handling** - Add retry logic, better error messages
-2. **Hardware Testing** - Test with actual thermal printers
-3. **Logo Support** - Implement bitmap logo printing
-4. **Network Printers** - Add IP/network printer support
-5. **Receipt Templates** - Multiple receipt format options
-6. **Print Queue** - Queue management for multiple receipts
-7. **Print History** - Log of printed receipts
+### Completed since initial summary
+- **Network printing path (TCP/IP)**
+  - Added a `NetworkPrinter` Capacitor wrapper for sending raw ESC/POS data to `host:port`.
+  - Implemented `printViaNetwork` in `PrintService` to use this plugin for `printerType: 'Network'`.
+  - Updated `sendToPrinter` to route network printers through `printViaNetwork` with basic `ip[:port]` parsing.
 
-### Migration Checklist
-- ✅ Print Service implemented
-- ✅ Bluetooth connectivity
-- ✅ Settings page created
-- ✅ Receipt formatting
-- ✅ Configuration persistence
-- ⏳ Customer Management Service (NEXT PRIORITY)
-- ⏳ Barcode Scanning
-- ⏳ Orders/Returns Management
-- ⏳ Reports and Analytics
+- **Multi-printer routing for hospitality**
+  - Extended `printKitchenTickets` to accept an explicit target printer.
+  - Updated hospitality `sendToKitchen` to resolve kitchen printers via `TerminalsService.getKitchenPrinters` with category-aware routing, falling back to the terminal receipt/default printer or global default when no mappings exist.
+
+### In progress / planned
+1. **Dynamic production areas & print jobs**  
+   Generalize `sendToKitchen` into a configurable `sendToProduction(area)` pipeline driven by PrintJobs (kitchen/bar/coffee/etc.), templates, and terminal area mappings.
+
+2. **Printer driver & connection metadata**  
+   Extend the `Printer` model with `driver` and `connection` fields (e.g. `escpos-generic`, `ocom-q1`, `bluetooth`, `network`, `usb`, `server`) and route them inside `PrintService.sendToPrinter`.
+
+3. **OCOM Q1 plugin migration**  
+   Wrap `cordova-plugin-ocom-q1-printer` as a Capacitor-compatible plugin and expose a `Q1Printer.print({ data })` API, then integrate it as a dedicated driver in `PrintService`.
+
+4. **Production area and printer mapping UI**  
+   Extend terminal/hospitality and printer settings screens to configure production areas (kitchen, bar, coffee, etc.) and map them to printers and product categories without code changes.
+
+5. **Optional enhancements**  
+   - Error handling and retries across all transports (BT, Network, SDK).  
+   - Hardware testing matrix across Android and Windows.  
+   - Receipt templates and print queues/history for auditability.
 
 ## 📋 Files Created/Modified
 

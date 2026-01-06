@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -51,16 +51,20 @@ import {
   card,
   phonePortrait,
   menuOutline,
-  arrowBack
+  arrowBack,
+  keypadOutline,
+  pauseOutline
 } from 'ionicons/icons';
 
-import { Product, CartItem, Customer, Payment } from '../../models';
+import { Product, CartItem, Customer, Payment, HeldTransaction } from '../../models';
 import { ProductsService } from '../../core/services/products.service';
 import { CartService } from '../../core/services/cart.service';
 import { CustomersService } from '../../core/services/customers.service';
 import { OrdersService } from '../../core/services/orders.service';
 import { PrintService } from '../../core/services/print.service';
 import { BarcodeService } from '../../core/services/barcode.service';
+import { AuthService } from '../../core/services/auth.service';
+import { SqliteService } from '../../core/services/sqlite.service';
 
 @Component({
   selector: 'app-pos',
@@ -112,6 +116,8 @@ export class PosPage implements OnInit {
   private ordersService = inject(OrdersService);
   private printService = inject(PrintService);
   private barcodeService = inject(BarcodeService);
+  private auth = inject(AuthService);
+  private sqlite = inject(SqliteService);
 
   // State
   products = this.productsService.products;
@@ -140,6 +146,10 @@ export class PosPage implements OnInit {
   // Mobile view state
   currentView = signal<'products' | 'cart'>('products');
   isMobile = signal<boolean>(false);
+
+  // Held transactions (reused from legacy retail POS)
+  showHeldTransactions = signal<boolean>(false);
+  heldTransactions = signal<HeldTransaction[]>([]);
 
   // Computed
   filteredProducts = computed(() => {
@@ -184,6 +194,14 @@ export class PosPage implements OnInit {
     return paid < total;
   });
 
+  // Desktop keyboard & on-screen keypad support
+  searchBuffer = signal<string>('');
+  showKeypad = signal<boolean>(false);
+  keypadBuffer = signal<string>('');
+  keypadDisplay = computed(() => this.keypadBuffer() || '0');
+  private keydownHandler = (event: KeyboardEvent) => this.handleKeyDown(event);
+  private bufferTimeout: any = null;
+
   constructor() {
     this.registerIcons();
   }
@@ -203,14 +221,24 @@ export class PosPage implements OnInit {
       card,
       'phone-portrait': phonePortrait,
       'menu-outline': menuOutline,
-      'arrow-back': arrowBack
+      'arrow-back': arrowBack,
+      'keypad-outline': keypadOutline,
+      'pause-outline': pauseOutline
     });
   }
 
   async ngOnInit() {
     this.detectMobile();
     window.addEventListener('resize', () => this.detectMobile());
+    window.addEventListener('keydown', this.keydownHandler);
     await this.loadData();
+  }
+
+  ngOnDestroy() {
+    window.removeEventListener('keydown', this.keydownHandler);
+    if (this.bufferTimeout) {
+      clearTimeout(this.bufferTimeout);
+    }
   }
 
   private detectMobile() {
@@ -257,6 +285,111 @@ export class PosPage implements OnInit {
 
   selectCategory(categoryId: string) {
     this.selectedCategory.set(categoryId);
+  }
+
+  /**
+   * Keyboard shortcuts and quick search
+   * Typing letters anywhere will populate the search box and filter products.
+   */
+  private handleKeyDown(event: KeyboardEvent) {
+    // Ignore when the user is typing into form fields
+    const target = event.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'ION-INPUT' || target.tagName === 'ION-SEARCHBAR') {
+      return;
+    }
+
+    // Function keys for high-speed retail operations
+    if (event.key === 'F1') {
+      event.preventDefault();
+      this.focusSearch();
+      return;
+    }
+    if (event.key === 'F2') {
+      event.preventDefault();
+      if (this.cartService.hasItems()) {
+        this.goToCheckout();
+      }
+      return;
+    }
+    if (event.key === 'F3') {
+      event.preventDefault();
+      this.holdTransaction();
+      return;
+    }
+    if (event.key === 'F4') {
+      event.preventDefault();
+      this.loadHeldTransactions();
+      return;
+    }
+
+    // Escape closes held list or clears search
+    if (event.key === 'Escape') {
+      if (this.showHeldTransactions()) {
+        this.showHeldTransactions.set(false);
+      } else {
+        this.searchBuffer.set('');
+        this.searchQuery.set('');
+      }
+      return;
+    }
+
+    // Letters and basic characters for product search
+    if (/^[a-zA-Z0-9 ]$/.test(event.key)) {
+      event.preventDefault();
+      const current = this.searchBuffer();
+      const next = current + event.key;
+      this.searchBuffer.set(next);
+      this.searchQuery.set(next);
+
+      if (this.bufferTimeout) {
+        clearTimeout(this.bufferTimeout);
+      }
+      this.bufferTimeout = setTimeout(() => {
+        this.searchBuffer.set('');
+      }, 8000);
+    }
+  }
+
+  private focusSearch() {
+    const searchBar = document.querySelector('ion-searchbar');
+    if (searchBar && (searchBar as any).setFocus) {
+      (searchBar as any).setFocus();
+    }
+  }
+
+  toggleKeypad() {
+    this.showKeypad.set(!this.showKeypad());
+  }
+
+  async onKeypadPress(key: string) {
+    if (key === 'ok') {
+      const value = this.keypadBuffer().trim();
+      this.searchQuery.set(value);
+      this.showKeypad.set(false);
+      return;
+    }
+
+    if (key === 'clear') {
+      this.keypadBuffer.set('');
+      this.searchQuery.set('');
+      return;
+    }
+
+    if (key === 'backspace') {
+      const current = this.keypadBuffer();
+      const next = current.slice(0, -1);
+      this.keypadBuffer.set(next);
+      this.searchQuery.set(next);
+      return;
+    }
+
+    // Digits / decimal for barcode or price-like search
+    if (/^[0-9.]$/.test(key)) {
+      const current = this.keypadBuffer();
+      const next = current + key;
+      this.keypadBuffer.set(next);
+      this.searchQuery.set(next);
+    }
   }
 
   /**
@@ -475,127 +608,6 @@ export class PosPage implements OnInit {
     const total = this.cashReceived() + this.cardAmount() + this.mobileAmount();
     this.amountPaid.set(total);
   }
-
-  async processPayment() {
-    // Validation
-    if (!this.cartService.hasItems()) {
-      this.showToast('Cart is empty');
-      return;
-    }
-
-    if (this.paymentType() === 'credit' && !this.selectedCustomer()) {
-      this.showToast('Please select a customer for credit payment');
-      return;
-    }
-
-    if (this.insufficientPayment()) {
-      if (this.paymentType() === 'credit') {
-        this.showToast('Customer has insufficient credit limit');
-      } else {
-        this.showToast('Insufficient payment amount');
-      }
-      return;
-    }
-
-    const loading = await this.loadingCtrl.create({
-      message: 'Processing payment...'
-    });
-    await loading.present();
-
-    try {
-      // Build payment data
-      const orderData: any = {
-        paymentType: this.paymentType(),
-        amountPaid: this.amountPaid(),
-        notes: this.notes()
-      };
-
-      if (this.selectedCustomer()) {
-        orderData.customer = this.selectedCustomer();
-        orderData.customerId = this.selectedCustomer()?._id;
-      }
-
-      // Create order
-      const order = await this.ordersService.createOrder(orderData);
-
-      // If credit payment, update customer balance
-      if (this.paymentType() === 'credit' && this.selectedCustomer()) {
-        await this.customersService.addCredit(
-          this.selectedCustomer()!._id,
-          this.cartSummary().total
-        );
-      }
-
-      await loading.dismiss();
-
-      // Print receipt
-      await this.printReceipt(order);
-
-      // Show success and reset
-      await this.showSuccessAlert(order.orderNumber || order.invoice_no || '', this.change());
-
-      // Reset
-      this.resetTransaction();
-      
-    } catch (error) {
-      await loading.dismiss();
-      console.error('Payment error:', error);
-      this.showToast('Error processing payment');
-    }
-  }
-
-  async printReceipt(order: any) {
-    try {
-      const receiptData = {
-        orderId: order._id,
-        orderNumber: order.orderNumber || order.invoice_no,
-        timestamp: order.timestamp || new Date(order.createdAt).toISOString(),
-        user: order.user || order.createdBy,
-        items: order.items.map((item: any) => ({
-          name: item.name || item.product.name,
-          quantity: item.quantity || item.Quantity,
-          price: item.price,
-          total: item.total || item.itemTotalPrice
-        })),
-        subtotal: order.subtotal || order.subTotalPrice || 0,
-        tax: order.tax || order.taxAmount || 0,
-        discount: order.discount || order.discountAmount || 0,
-        total: order.total || order.grandTotal || 0,
-        amountPaid: order.amountPaid,
-        change: order.change,
-        paymentMethod: order.paymentMethod || order.paymentOption || '',
-        customer: order.customer,
-        notes: order.notes
-      };
-
-      await this.printService.printReceipt(receiptData);
-    } catch (error) {
-      console.error('Print error:', error);
-    }
-  }
-
-  async showSuccessAlert(orderNumber: string, change: number) {
-    const alert = await this.alertCtrl.create({
-      header: 'Payment Successful',
-      message: `
-        <p><strong>Order:</strong> ${orderNumber}</p>
-        <p><strong>Total:</strong> ZMW ${this.cartSummary().total.toFixed(2)}</p>
-        <p><strong>Paid:</strong> ZMW ${this.amountPaid().toFixed(2)}</p>
-        ${change > 0 ? `<p><strong>Change:</strong> ZMW ${change.toFixed(2)}</p>` : ''}
-      `,
-      buttons: ['OK']
-    });
-
-    await alert.present();
-  }
-
-  resetTransaction() {
-    this.cartService.clearCart();
-    this.resetPayment();
-    this.selectedCustomer.set(null);
-    this.notes.set('');
-  }
-
   resetPayment() {
     this.paymentType.set('cash');
     this.amountPaid.set(0);
@@ -603,6 +615,83 @@ export class PosPage implements OnInit {
     this.cardAmount.set(0);
     this.mobileAmount.set(0);
     this.payments.set([]);
+  }
+
+  /**
+   * Unified checkout: send retail cart to the shared Checkout page
+   * so that payment, printing and receipt options behave the same
+   * across retail, category and hospitality modes.
+   */
+  goToCheckout() {
+    if (!this.cartService.hasItems()) {
+      this.showToast('Cart is empty');
+      return;
+    }
+
+    this.router.navigate(['/checkout']);
+  }
+
+  /**
+   * Hold/recall transactions using shared SQLite infrastructure
+   * (reused pattern from legacy PosRetailPage).
+   */
+  async holdTransaction() {
+    if (!this.cartService.hasItems()) {
+      this.showToast('Cart is empty');
+      return;
+    }
+
+    await this.sqlite.ensureInitialized();
+
+    const user = this.auth.currentUser();
+    const terminal = this.auth.currentTerminal();
+
+    const summary = this.cartSummary();
+
+    const held: HeldTransaction = {
+      _id: `held_${Date.now()}`,
+      type: 'held-transaction',
+      items: this.cartService.getItems(),
+      customer: this.selectedCustomer() || undefined,
+      subtotal: summary.subtotal,
+      tax: summary.tax,
+      discount: summary.discount,
+      total: summary.total,
+      heldBy: user?._id || 'unknown',
+      heldAt: Date.now(),
+      terminalId: terminal?._id || 'unknown'
+    };
+
+    await this.sqlite.addHeldTransaction(held);
+    this.cartService.clearCart();
+    this.selectedCustomer.set(null);
+    this.showToast('Transaction held');
+  }
+
+  async loadHeldTransactions() {
+    await this.sqlite.ensureInitialized();
+    const terminal = this.auth.currentTerminal();
+    const held = await this.sqlite.getHeldTransactions(terminal?._id);
+    this.heldTransactions.set(held as HeldTransaction[]);
+    this.showHeldTransactions.set(true);
+  }
+
+  async recallTransaction(held: HeldTransaction) {
+    this.cartService.replaceItems(held.items || []);
+    this.selectedCustomer.set(held.customer || null);
+
+    if (held._id) {
+      await this.sqlite.deleteHeldTransaction(held._id);
+    }
+
+    this.showHeldTransactions.set(false);
+
+    // On mobile, jump straight to cart view
+    if (this.isMobile()) {
+      this.currentView.set('cart');
+    }
+
+    this.showToast('Transaction recalled');
   }
 
   private async showToast(message: string) {

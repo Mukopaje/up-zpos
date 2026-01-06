@@ -52,15 +52,27 @@ import {
   card,
   phonePortrait,
   menuOutline,
+  keypadOutline,
   arrowBack,
   chevronBack,
   chevronForward,
   createOutline,
   optionsOutline,
-  trashOutline
+  trashOutline,
+  restaurantOutline,
+  swapHorizontalOutline,
+  personOutline,
+  documentTextOutline,
+  printOutline,
+  copyOutline,
+  addCircleOutline,
+  removeCircleOutline,
+  giftOutline,
+  pricetagOutline,
+  closeCircleOutline
 } from 'ionicons/icons';
 
-import { Product, CartItem, Customer, Payment, ModifierGroup } from '../../models';
+import { Product, CartItem, Customer, Payment, ModifierGroup, ReceiptData, HeldTransaction } from '../../models';
 import { ProductsService } from '../../core/services/products.service';
 import { CartService } from '../../core/services/cart.service';
 import { CustomersService } from '../../core/services/customers.service';
@@ -69,6 +81,19 @@ import { PrintService } from '../../core/services/print.service';
 import { BarcodeService } from '../../core/services/barcode.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { ProductOptionsModalComponent } from './product-options-modal/product-options-modal.component';
+import { HospitalityContextService } from '../../core/services/hospitality-context.service';
+import { TablesService } from '../../core/services/tables.service';
+import { AuthService } from '../../core/services/auth.service';
+import { SqliteService } from '../../core/services/sqlite.service';
+import { CustomerSelectModalComponent } from '../checkout/customer-select-modal/customer-select-modal.component';
+
+interface CommandButton {
+  id: string;
+  label: string;
+  icon?: string;
+  level: 'ticket' | 'order';
+  color?: string; // Ionic color key: 'primary', 'warning', 'danger', etc.
+}
 
 @Component({
   selector: 'app-pos-category',
@@ -122,13 +147,19 @@ export class PosCategoryPage implements OnInit {
   private printService = inject(PrintService);
   private barcodeService = inject(BarcodeService);
   private settingsService = inject(SettingsService);
+  hospitalityContext = inject(HospitalityContextService);
+  private tablesService = inject(TablesService);
+  private authService = inject(AuthService);
+  private sqliteService = inject(SqliteService);
 
   // State
   products = this.productsService.products;
   categories = this.productsService.categories;
+  menus = this.productsService.menus;
   cartItems = this.cartService.cartItems;
   cartSummary = this.cartService.summary;
-  selectedCategory = signal<string>('all');
+  selectedCategory = signal<string>('');
+  selectedMenuId = signal<string | null>(null);
   searchQuery = signal<string>('');
   isLoading = this.productsService.isLoading;
   isScanning = this.barcodeService.isScanning;
@@ -151,6 +182,9 @@ export class PosCategoryPage implements OnInit {
   currentView = signal<'products' | 'cart' | 'checkout'>('products');
   isMobile = signal<boolean>(false);
 
+  // UI animation state
+  cartFabAnimating = signal<boolean>(false);
+
   // Category pagination
   currentCategoryPage = signal<number>(1);
   categoriesPerPage = signal<number>(10);
@@ -164,6 +198,40 @@ export class PosCategoryPage implements OnInit {
   bufferTimeout: any = null;
   isGlobalSearchActive = signal<boolean>(false);
 
+  // On-screen keypad
+  showKeypad = signal<boolean>(false);
+  keypadMode = signal<'qty' | 'barcode'>('qty');
+  barcodeBuffer = signal<string>('');
+  keypadDisplay = computed(() =>
+    this.keypadMode() === 'qty' ? this.keyboardBuffer() : this.barcodeBuffer()
+  );
+
+  // Ticket & order command panel state
+  panelMode = signal<'ticket' | 'order'>('ticket');
+  selectedCartItem = signal<CartItem | null>(null);
+
+  // Held transactions
+  showHeldTransactions = signal<boolean>(false);
+  heldTransactions = signal<HeldTransaction[]>([]);
+
+  ticketButtons = signal<CommandButton[]>([ 
+    { id: 'changeTable', label: 'Change Table', icon: 'swap-horizontal-outline', level: 'ticket', color: 'tertiary' },
+    { id: 'selectCustomer', label: 'Select Customer', icon: 'person-outline', level: 'ticket', color: 'primary' },
+    { id: 'ticketNote', label: 'Ticket Note', icon: 'document-text-outline', level: 'ticket', color: 'medium' },
+    { id: 'printBill', label: 'Print Bill', icon: 'print-outline', level: 'ticket', color: 'warning' },
+    { id: 'addTicket', label: 'Add Ticket', icon: 'copy-outline', level: 'ticket', color: 'primary' }
+  ]);
+
+  orderButtons = signal<CommandButton[]>([
+    { id: 'qtyPlus', label: 'Quantity +', icon: 'add-circle-outline', level: 'order', color: 'primary' },
+    { id: 'qtyMinus', label: 'Quantity -', icon: 'remove-circle-outline', level: 'order', color: 'primary' },
+    { id: 'gift', label: 'Gift', icon: 'gift-outline', level: 'order', color: 'success' },
+    { id: 'void', label: 'Void', icon: 'close-circle-outline', level: 'order', color: 'danger' },
+    { id: 'cancel', label: 'Cancel', icon: 'trash-outline', level: 'order', color: 'medium' },
+    { id: 'move', label: 'Move', icon: 'swap-horizontal-outline', level: 'order', color: 'tertiary' },
+    { id: 'changePrice', label: 'Change Price', icon: 'pricetag-outline', level: 'order', color: 'warning' }
+  ]);
+
   // Computed
   filteredProducts = computed(() => {
     let filtered = this.products();
@@ -172,6 +240,23 @@ export class PosCategoryPage implements OnInit {
     const categoryId = this.selectedCategory();
     if (categoryId) {
       filtered = filtered.filter(p => p.category === categoryId);
+    }
+
+    // Filter by selected menu (or implicit single menu)
+    const activeMenus = this.activeMenus();
+    const selectedMenuId = this.selectedMenuId();
+
+    if (selectedMenuId) {
+      filtered = filtered.filter(p => {
+        const category = this.categories().find(c => c._id === p.category);
+        return category?.menuId === selectedMenuId;
+      });
+    } else if (activeMenus.length === 1) {
+      const onlyMenuId = activeMenus[0]._id;
+      filtered = filtered.filter(p => {
+        const category = this.categories().find(c => c._id === p.category);
+        return !category?.menuId || category?.menuId === onlyMenuId;
+      });
     }
 
     // Filter by search query
@@ -200,15 +285,23 @@ export class PosCategoryPage implements OnInit {
     );
   });
 
+  // Products actually shown in the grid: either category-filtered or global search
+  visibleProducts = computed(() => {
+    if (this.isGlobalSearchActive()) {
+      return this.globalSearchProducts();
+    }
+    return this.filteredProducts();
+  });
+
   // Category pagination computed
   totalCategoryPages = computed(() => {
-    const total = this.categories().length;
+    const total = this.visibleCategories().length;
     const perPage = this.categoriesPerPage();
     return Math.ceil(total / perPage);
   });
 
   paginatedCategories = computed(() => {
-    const allCategories = this.categories();
+    const allCategories = this.visibleCategories();
     const page = this.currentCategoryPage();
     const perPage = this.categoriesPerPage();
     const startIndex = (page - 1) * perPage;
@@ -216,11 +309,47 @@ export class PosCategoryPage implements OnInit {
     return allCategories.slice(startIndex, endIndex);
   });
 
+  activeMenus = computed(() => this.menus().filter(m => m.active));
+
+  showMenuBar = computed(() => this.activeMenus().length > 1);
+
+  currentMenu = computed(() => {
+    const selectedId = this.selectedMenuId();
+    const activeMenus = this.activeMenus();
+    if (selectedId) {
+      return activeMenus.find(m => m._id === selectedId) || null;
+    }
+    return activeMenus.length > 0 ? activeMenus[0] : null;
+  });
+
+  visibleCategories = computed(() => {
+    const allCategories = this.categories();
+    const rootCategories = allCategories.filter(c => !c.parentId);
+    const activeMenus = this.activeMenus();
+    const selectedMenuId = this.selectedMenuId();
+
+    let filtered = rootCategories;
+
+    if (activeMenus.length > 1) {
+      if (selectedMenuId) {
+        filtered = filtered.filter(c => c.menuId === selectedMenuId);
+      }
+    } else if (activeMenus.length === 1) {
+      const onlyMenuId = activeMenus[0]._id;
+      filtered = filtered.filter(c => !c.menuId || c.menuId === onlyMenuId);
+    }
+
+    return filtered;
+  });
+
   categoryColumns = computed(() => {
     const categoriesOnPage = this.paginatedCategories().length;
     // Show 2 columns if more than 6 categories on page, otherwise 1 column
     return categoriesOnPage > 6 ? 2 : 1;
   });
+
+  // Swipe tracking for category page navigation (mobile)
+  private categorySwipeStartX: number | null = null;
 
   // Tile colors from settings
   categoryTileColor = computed(() => {
@@ -270,6 +399,7 @@ export class PosCategoryPage implements OnInit {
       person,
       cash,
       card,
+      'keypad-outline': keypadOutline,
       'phone-portrait': phonePortrait,
       'menu-outline': menuOutline,
       'arrow-back': arrowBack,
@@ -277,7 +407,18 @@ export class PosCategoryPage implements OnInit {
       'chevron-forward': chevronForward,
       'create-outline': createOutline,
       'options-outline': optionsOutline,
-      'trash-outline': trashOutline
+      'trash-outline': trashOutline,
+      'restaurant-outline': restaurantOutline,
+      'swap-horizontal-outline': swapHorizontalOutline,
+      'person-outline': personOutline,
+      'document-text-outline': documentTextOutline,
+      'print-outline': printOutline,
+      'copy-outline': copyOutline,
+      'add-circle-outline': addCircleOutline,
+      'remove-circle-outline': removeCircleOutline,
+      'gift-outline': giftOutline,
+      'pricetag-outline': pricetagOutline,
+      'close-circle-outline': closeCircleOutline
     });
   }
 
@@ -286,10 +427,17 @@ export class PosCategoryPage implements OnInit {
     window.addEventListener('resize', () => this.detectMobile());
     this.setupKeyboardListener();
     await this.loadData();
-    
-    // Set first category as default
-    const categories = this.categories();
-    if (categories.length > 0 && this.selectedCategory() === 'all') {
+
+    // Set default menu when available
+    const activeMenus = this.activeMenus();
+    if (activeMenus.length > 0 && !this.selectedMenuId()) {
+      this.selectedMenuId.set(activeMenus[0]._id);
+    }
+
+    // On desktop, set first category as default; on mobile, leave
+    // unselected so the landing view shows the category tiles.
+    const categories = this.visibleCategories();
+    if (!this.isMobile() && categories.length > 0 && !this.selectedCategory()) {
       this.selectedCategory.set(categories[0]._id);
     }
   }
@@ -327,12 +475,12 @@ export class PosCategoryPage implements OnInit {
     }
     if (event.key === 'F3') {
       event.preventDefault();
-      // TODO: Hold transaction
+      this.holdTransaction();
       return;
     }
     if (event.key === 'F4') {
       event.preventDefault();
-      // TODO: Recall transaction
+      this.loadHeldTransactions();
       return;
     }
 
@@ -396,13 +544,146 @@ export class PosCategoryPage implements OnInit {
     }
     this.bufferTimeout = setTimeout(() => {
       this.clearBuffers();
-    }, 2000); // Clear after 2 seconds of inactivity
+    }, 8000); // Clear after 8 seconds of inactivity
   }
 
   clearBuffers() {
     this.keyboardBuffer.set('');
     this.searchBuffer.set('');
     this.isGlobalSearchActive.set(false);
+  }
+
+  toggleKeypad() {
+    this.showKeypad.set(!this.showKeypad());
+  }
+
+  setKeypadMode(mode: 'qty' | 'barcode') {
+    this.keypadMode.set(mode);
+  }
+
+  async onKeypadPress(key: string) {
+    if (key === 'ok') {
+      if (this.keypadMode() === 'barcode' && this.barcodeBuffer()) {
+        await this.lookupByBarcode(this.barcodeBuffer());
+        this.barcodeBuffer.set('');
+      }
+      this.showKeypad.set(false);
+      return;
+    }
+
+    if (key === 'clear') {
+      if (this.keypadMode() === 'qty') {
+        this.keyboardBuffer.set('');
+      } else {
+        this.barcodeBuffer.set('');
+      }
+      return;
+    }
+
+    if (key === 'backspace') {
+      if (this.keypadMode() === 'qty') {
+        const current = this.keyboardBuffer();
+        this.keyboardBuffer.set(current.slice(0, -1));
+      } else {
+        const current = this.barcodeBuffer();
+        this.barcodeBuffer.set(current.slice(0, -1));
+      }
+      return;
+    }
+
+    // Digit or dot
+    if (this.keypadMode() === 'qty') {
+      // For quantity we only allow digits
+      if (/^[0-9]$/.test(key)) {
+        const current = this.keyboardBuffer();
+        this.keyboardBuffer.set(current + key);
+      }
+    } else {
+      // Barcode mode: allow digits and dot
+      if (/^[0-9.]$/.test(key)) {
+        const current = this.barcodeBuffer();
+        this.barcodeBuffer.set(current + key);
+      }
+    }
+  }
+
+  /**
+   * Hold/recall transactions using shared SQLite infrastructure
+   */
+  async holdTransaction() {
+    if (!this.cartService.hasItems()) {
+      await this.showToast('Cart is empty');
+      return;
+    }
+
+    await this.sqliteService.ensureInitialized();
+
+    const user = this.authService.currentUser();
+    const terminal = this.authService.currentTerminal();
+    const summary = this.cartSummary();
+
+    const held: HeldTransaction = {
+      _id: `held_${Date.now()}`,
+      type: 'held-transaction',
+      items: this.cartService.getItems(),
+      customer: this.selectedCustomer() || undefined,
+      subtotal: summary.subtotal,
+      tax: summary.tax,
+      discount: summary.discount,
+      total: summary.total,
+      heldBy: user?._id || 'unknown',
+      heldAt: Date.now(),
+      terminalId: terminal?._id || 'unknown'
+    };
+
+    await this.sqliteService.addHeldTransaction(held);
+    this.cartService.clearCart();
+    this.selectedCustomer.set(null);
+    await this.showToast('Ticket held');
+  }
+
+  async loadHeldTransactions() {
+    await this.sqliteService.ensureInitialized();
+    const terminal = this.authService.currentTerminal();
+    const held = await this.sqliteService.getHeldTransactions(terminal?._id);
+    this.heldTransactions.set(held as HeldTransaction[]);
+    this.showHeldTransactions.set(true);
+  }
+
+  async recallTransaction(held: HeldTransaction) {
+    this.cartService.replaceItems(held.items || []);
+    this.selectedCustomer.set(held.customer || null);
+
+    if (held._id) {
+      await this.sqliteService.deleteHeldTransaction(held._id);
+    }
+
+    this.showHeldTransactions.set(false);
+
+    // On mobile, switch to cart view so the recalled ticket is visible
+    if (this.isMobile()) {
+      this.currentView.set('cart');
+    }
+
+    await this.showToast('Ticket recalled');
+  }
+
+  showTicketPanel() {
+    this.panelMode.set('ticket');
+    this.selectedCartItem.set(null);
+  }
+
+  private selectCartItem(item: CartItem) {
+    this.selectedCartItem.set(item);
+    this.panelMode.set('order');
+  }
+
+  onCartItemClick(item: CartItem) {
+    this.selectCartItem(item);
+  }
+
+  onCartItemPress(item: CartItem) {
+    this.selectCartItem(item);
   }
 
   private focusSearch() {
@@ -466,6 +747,233 @@ export class PosCategoryPage implements OnInit {
     this.currentView.set('products');
   }
 
+  isTicketButtonDisabled(button: CommandButton): boolean {
+    switch (button.id) {
+      case 'changeTable':
+      case 'addTicket':
+        return this.hospitalityContext.mode() !== 'hospitality';
+      case 'printBill':
+        return this.cartItems().length === 0;
+      default:
+        return false;
+    }
+  }
+
+  isOrderButtonDisabled(button: CommandButton): boolean {
+    const item = this.selectedCartItem();
+    if (!item) {
+      return true;
+    }
+
+    switch (button.id) {
+      case 'qtyMinus':
+        return item.quantity <= 1;
+      case 'void':
+        return !item.sentToKitchen;
+      case 'cancel':
+        return !!item.sentToKitchen;
+      case 'changePrice':
+        // TODO: Wire to roles/permissions; allow for now
+        return false;
+      default:
+        return false;
+    }
+  }
+
+  async handleTicketButton(button: CommandButton) {
+    switch (button.id) {
+      case 'changeTable':
+        if (this.hospitalityContext.mode() === 'hospitality') {
+          await this.handleChangeTable();
+        } else {
+          await this.showToast('Change Table is only available in hospitality mode');
+        }
+        break;
+      case 'selectCustomer':
+        await this.selectCustomer();
+        break;
+      case 'ticketNote': {
+        const alert = await this.alertCtrl.create({
+          header: 'Ticket Note',
+          inputs: [
+            {
+              name: 'note',
+              type: 'text',
+              placeholder: 'Add note to this ticket',
+              value: this.notes()
+            }
+          ],
+          buttons: [
+            { text: 'Cancel', role: 'cancel' },
+            {
+              text: 'Save',
+              handler: data => {
+                this.notes.set(data.note || '');
+              }
+            }
+          ]
+        });
+        await alert.present();
+        break;
+      }
+      case 'printBill':
+        await this.printProvisionalBillFromCart();
+        break;
+      case 'addTicket':
+        // TODO: Support multiple tickets per table
+        await this.showToast('Add Ticket not implemented yet');
+        break;
+    }
+  }
+
+  /**
+   * Change Table: persist the current hospitality order on the
+   * source table, mark a pending move, and return to the tables
+   * screen so the user can click the new table.
+   */
+  private async handleChangeTable() {
+    const sourceTableId = this.hospitalityContext.tableId();
+
+    if (!sourceTableId) {
+      await this.showToast('No active table to move');
+      return;
+    }
+    try {
+      // Persist the current cart as the latest table state so that
+      // when we move the session, all items and totals are
+      // correctly transferred.
+      const table = await this.tablesService.getTable(sourceTableId);
+      if (!table) {
+        await this.showToast('Current table not found');
+        return;
+      }
+
+      const cartItems = this.cartService.getItems().map(item => ({ ...item }));
+      const updatedTable = {
+        ...table,
+        items: cartItems,
+        amount: this.cartSummary().total
+      };
+
+      await this.tablesService.updateTable(updatedTable);
+
+      // Mark a pending move so the next table selected on the
+      // hospitality screen becomes the destination.
+      this.hospitalityContext.beginTableMove(sourceTableId);
+
+      // Clear the in-memory cart; when the user opens the
+      // destination table, the cart will be rehydrated from the
+      // moved table's items.
+      this.cartService.clearCart();
+
+      // Navigate back to the tables screen so the user can pick
+      // the destination table.
+      this.router.navigate(['/pos-hospitality']);
+    } catch (error) {
+      console.error('Error preparing change-table flow:', error);
+      await this.showToast('Failed to prepare table change');
+    }
+  }
+
+  private async printProvisionalBillFromCart() {
+    if (this.cartItems().length === 0) {
+      await this.showToast('Cart is empty');
+      return;
+    }
+
+    const summary = this.cartSummary();
+    const combinedDiscount = (summary.discount || 0) + (summary.ticketDiscount || 0);
+
+    const receiptData: ReceiptData = {
+      orderId: 'PROVISIONAL_' + Date.now(),
+      orderNumber: 'PROVISIONAL',
+      timestamp: new Date().toISOString(),
+      user: '',
+      items: this.cartItems().map(item => ({
+        name: item.product.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      })),
+      subtotal: summary.subtotal,
+      tax: summary.tax,
+      discount: combinedDiscount,
+      total: summary.total,
+      amountPaid: 0,
+      change: 0,
+      paymentMethod: 'Provisional',
+      payments: [],
+      customer: this.selectedCustomer() || undefined,
+      notes: this.notes()
+    };
+
+    const success = await this.printService.printReceipt(receiptData);
+    if (!success) {
+      await this.showToast('Printer not configured or printing is disabled');
+    }
+  }
+
+  async handleOrderButton(button: CommandButton) {
+    const item = this.selectedCartItem();
+    if (!item) {
+      return;
+    }
+
+    switch (button.id) {
+      case 'qtyPlus':
+        this.incrementQuantity(item);
+        break;
+      case 'qtyMinus':
+        this.decrementQuantity(item);
+        break;
+      case 'gift':
+        // Make line free by discounting the full line total
+        this.cartService.applyItemDiscount(item.product._id, item.total);
+        break;
+      case 'void':
+        await this.voidCartItem(item);
+        break;
+      case 'cancel':
+        if (!item.sentToKitchen) {
+          this.removeFromCart(item);
+          this.showTicketPanel();
+        }
+        break;
+      case 'move':
+        // TODO: Implement move between tickets
+        await this.showToast('Move not implemented yet');
+        break;
+      case 'changePrice': {
+        const alert = await this.alertCtrl.create({
+          header: 'Change Price',
+          inputs: [
+            {
+              name: 'price',
+              type: 'number',
+              value: item.price,
+              min: 0,
+              placeholder: 'New unit price'
+            }
+          ],
+          buttons: [
+            { text: 'Cancel', role: 'cancel' },
+            {
+              text: 'Update',
+              handler: data => {
+                const newPrice = parseFloat(data.price);
+                if (!isNaN(newPrice) && newPrice >= 0) {
+                  this.cartService.updateItemPrice(item.product._id, newPrice);
+                }
+              }
+            }
+          ]
+        });
+        await alert.present();
+        break;
+      }
+    }
+  }
+
   goToCheckout() {
     if (this.cartItems().length === 0) {
       this.showToast('Cart is empty');
@@ -482,6 +990,161 @@ export class PosCategoryPage implements OnInit {
 
   async ionViewWillEnter() {
     await this.loadData();
+
+    // After returning from checkout or other flows, ensure the
+    // mobile landing experience shows the category tiles when the
+    // cart is empty instead of an empty cart view.
+    if (this.isMobile()) {
+      if (!this.cartService.hasItems()) {
+        this.currentView.set('products');
+        this.selectedCategory.set('');
+      } else if (this.currentView() === 'checkout') {
+        // If we somehow return while still in checkout mode but
+        // have items, show the cart instead of a blank state.
+        this.currentView.set('cart');
+      }
+    }
+  }
+
+  /**
+   * Simple horizontal swipe detection on the categories column to
+   * move between category pages on mobile devices.
+   */
+  onCategorySwipeStart(event: any) {
+    if (!this.isMobile()) {
+      return;
+    }
+
+    const touch = event.touches && event.touches[0];
+    if (touch) {
+      this.categorySwipeStartX = touch.clientX;
+    }
+  }
+
+  onCategorySwipeEnd(event: any) {
+    if (!this.isMobile() || this.categorySwipeStartX === null) {
+      return;
+    }
+
+    const touch = event.changedTouches && event.changedTouches[0];
+    if (!touch) {
+      this.categorySwipeStartX = null;
+      return;
+    }
+
+    const deltaX = touch.clientX - this.categorySwipeStartX;
+    const threshold = 50; // minimum horizontal movement in px to count as a swipe
+    this.categorySwipeStartX = null;
+
+    if (Math.abs(deltaX) < threshold) {
+      return;
+    }
+
+    // Swipe left -> next page, swipe right -> previous page
+    if (deltaX < 0 && this.currentCategoryPage() < this.totalCategoryPages()) {
+      this.nextCategoryPage();
+    } else if (deltaX > 0 && this.currentCategoryPage() > 1) {
+      this.previousCategoryPage();
+    }
+  }
+
+  async closeTableFromHospitality() {
+    if (this.hospitalityContext.mode() !== 'hospitality' || !this.hospitalityContext.tableId()) {
+      this.router.navigate(['/pos-hospitality']);
+      return;
+    }
+
+    const tableId = this.hospitalityContext.tableId()!;
+
+    try {
+      const table = await this.tablesService.getTable(tableId);
+      if (!table) {
+        this.hospitalityContext.clear();
+        this.router.navigate(['/pos-hospitality']);
+        return;
+      }
+
+      // Current table state from the database (what the kitchen has
+      // already seen) vs the in-memory cart (what the waiter just did).
+      const originalItems = table.items || [];
+      const cartItems = this.cartService.getItems().map(item => ({ ...item }));
+
+      // Compute the incremental "new" items to send to the kitchen by
+      // comparing quantities against the original table snapshot.
+      const newItems: CartItem[] = [];
+
+      for (const item of cartItems) {
+        const original = originalItems.find(orig =>
+          orig.product && item.product && orig.product._id === item.product._id
+        );
+
+        if (!original) {
+          // Entirely new line that wasn't on the table before
+          newItems.push(item);
+          continue;
+        }
+
+        if (item.quantity > original.quantity) {
+          const deltaQty = item.quantity - original.quantity;
+
+          const unitTotal = item.quantity > 0 ? item.total / item.quantity : item.price;
+          const unitTax = item.quantity > 0 ? (item.tax || 0) / item.quantity : 0;
+          const unitDiscount = item.quantity > 0 ? (item.discount || 0) / item.quantity : 0;
+
+          const deltaTotal = unitTotal * deltaQty;
+
+          const deltaItem: CartItem = {
+            ...item,
+            quantity: deltaQty,
+            Quantity: deltaQty,
+            total: Number(deltaTotal.toFixed(2)),
+            itemTotalPrice: Number(deltaTotal.toFixed(2)),
+            tax: Number((unitTax * deltaQty).toFixed(2)),
+            itemTotalTax: Number((unitTax * deltaQty).toFixed(2)),
+            discount: Number((unitDiscount * deltaQty).toFixed(2)),
+            itemDiscount: Number((unitDiscount * deltaQty).toFixed(2))
+          };
+
+          newItems.push(deltaItem);
+        }
+      }
+
+      const now = Date.now();
+      newItems.forEach(item => {
+        (item as any).sentToKitchen = true;
+        (item as any).sentAt = now;
+      });
+
+      // Persist the full current cart as the table state so that
+      // amount and items reflect everything just served.
+      const updatedTable = {
+        ...table,
+        items: cartItems,
+        amount: this.cartSummary().total
+      };
+
+      await this.tablesService.updateTable(updatedTable);
+
+      // Send only the incremental items to the kitchen/bar pipeline.
+      if (newItems.length > 0) {
+        await this.printService.printKitchenTickets({
+          table: {
+            number: table.number,
+            guestName: table.guestName,
+            guestCount: table.guestCount,
+            waiterName: table.waiterName
+          },
+          items: newItems
+        });
+      }
+
+    } catch (error) {
+      console.error('Error closing hospitality table from category POS:', error);
+    } finally {
+      this.cartService.clearCart();
+      this.hospitalityContext.clear();
+      this.router.navigate(['/pos-hospitality']);
+    }
   }
 
   private async loadData() {
@@ -490,6 +1153,7 @@ export class PosCategoryPage implements OnInit {
       await Promise.all([
         this.productsService.loadProducts(),
         this.productsService.loadCategories(),
+        this.productsService.loadMenus(),
         this.customersService.loadCustomers()
       ]);
     } catch (error) {
@@ -530,6 +1194,19 @@ export class PosCategoryPage implements OnInit {
     const current = this.currentCategoryPage();
     if (current > 1) {
       this.currentCategoryPage.set(current - 1);
+    }
+  }
+
+  selectMenu(menuId: string) {
+    this.selectedMenuId.set(menuId);
+    this.currentCategoryPage.set(1);
+
+    // Reset category selection when switching menus
+    const categories = this.visibleCategories();
+    if (categories.length > 0) {
+      this.selectedCategory.set(categories[0]._id);
+    } else {
+      this.selectedCategory.set('');
     }
   }
 
@@ -621,6 +1298,7 @@ export class PosCategoryPage implements OnInit {
     } else {
       this.cartService.addItem(product, finalQuantity);
       this.showToast(`${product.name} added to cart`);
+      this.triggerCartFabAnimation();
     }
   }
 
@@ -654,6 +1332,7 @@ export class PosCategoryPage implements OnInit {
         modifiers: data.modifiers
       } as CartItem);
       this.showToast(`${product.name} added to cart - $${data.totalPrice.toFixed(2)}`);
+      this.triggerCartFabAnimation();
     }
   }
 
@@ -666,6 +1345,13 @@ export class PosCategoryPage implements OnInit {
           icon: 'create-outline',
           handler: () => {
             this.editQuantity(item);
+          }
+        },
+        {
+          text: 'Line Discount',
+          icon: 'pricetag-outline',
+          handler: () => {
+            this.editItemDiscount(item);
           }
         },
         {
@@ -780,44 +1466,21 @@ export class PosCategoryPage implements OnInit {
    * Customer selection
    */
   async selectCustomer() {
-    const customers = this.customersService.activeCustomers();
-    
-    const alert = await this.alertCtrl.create({
-      header: 'Select Customer',
-      inputs: [
-        {
-          name: 'search',
-          type: 'text',
-          placeholder: 'Search customers...'
-        },
-        ...customers.map(c => ({
-          type: 'radio' as const,
-          label: `${c.name} - ${c.phone}`,
-          value: c._id,
-          checked: this.selectedCustomer()?._id === c._id
-        }))
-      ],
-      buttons: [
-        {
-          text: 'None',
-          handler: () => {
-            this.selectedCustomer.set(null);
-          }
-        },
-        {
-          text: 'Select',
-          handler: (customerId) => {
-            const customer = customers.find(c => c._id === customerId);
-            if (customer) {
-              this.selectedCustomer.set(customer);
-              this.showToast(`Customer: ${customer.name}`);
-            }
-          }
-        }
-      ]
+    const modal = await this.modalCtrl.create({
+      component: CustomerSelectModalComponent,
+      componentProps: {
+        totalAmount: 0,
+        enforceCreditLimit: false
+      }
     });
 
-    await alert.present();
+    await modal.present();
+    const { data, role } = await modal.onWillDismiss();
+
+    if (role === 'selected' && data) {
+      this.selectedCustomer.set(data as Customer);
+      await this.showToast(`Customer: ${data.name}`);
+    }
   }
 
   clearCustomer() {
@@ -983,6 +1646,106 @@ export class PosCategoryPage implements OnInit {
     this.cardAmount.set(0);
     this.mobileAmount.set(0);
     this.payments.set([]);
+  }
+
+  private async editItemDiscount(item: CartItem) {
+    const alert = await this.alertCtrl.create({
+      header: 'Line Discount',
+      message: `Set discount for ${item.product.name}`,
+      inputs: [
+        {
+          name: 'amount',
+          type: 'number',
+          value: item.discount || 0,
+          min: 0,
+          placeholder: 'Discount amount (ZMW)'
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Apply',
+          handler: data => {
+            const raw = parseFloat(data.amount);
+            const amount = isNaN(raw) || raw < 0 ? 0 : raw;
+            this.cartService.applyItemDiscount(item.product._id, amount);
+          }
+        }
+      ]
+    });
+
+    await alert.present();
+  }
+
+  private async voidCartItem(item: CartItem) {
+    if (!this.authService.canVoidTransactions()) {
+      await this.showToast('You are not allowed to void items');
+      return;
+    }
+
+    const alert = await this.alertCtrl.create({
+      header: 'Void Item',
+      message: `Void ${item.quantity}x ${item.product.name}?`,
+      inputs: [
+        {
+          name: 'reason',
+          type: 'text',
+          placeholder: 'Reason (optional)'
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Void',
+          role: 'destructive',
+          handler: async data => {
+            const reason = (data?.reason || '').trim() || null;
+            const currentUser = this.authService.currentUser();
+            const createdBy = currentUser
+              ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || currentUser.email || currentUser._id
+              : 'Unknown';
+
+            const unitPrice = item.quantity > 0 ? item.total / item.quantity : item.price;
+
+            try {
+              await this.sqliteService.addVoidRecord({
+                sale_id: null,
+                table_id: this.hospitalityContext.tableId() || null,
+                product_id: item.product._id,
+                product_name: item.product.name,
+                quantity: item.quantity,
+                price: unitPrice,
+                total: item.total,
+                reason,
+                created_by: createdBy
+              });
+
+              this.removeFromCart(item);
+              this.showTicketPanel();
+              await this.showToast('Item voided');
+            } catch (error) {
+              console.error('Error recording void:', error);
+              await this.showToast('Failed to record void');
+            }
+          }
+        }
+      ]
+    });
+
+    await alert.present();
+  }
+
+  private triggerCartFabAnimation() {
+    this.cartFabAnimating.set(true);
+    setTimeout(() => {
+      this.cartFabAnimating.set(false);
+    }, 300);
   }
 
   private async showToast(message: string) {

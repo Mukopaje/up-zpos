@@ -140,6 +140,21 @@
     </ion-item>
   </ion-list>
 
+  <!-- Loyalty & Promotions -->
+  <ion-list>
+    <ion-list-header>
+      <ion-label>Loyalty &amp; Promotions</ion-label>
+    </ion-list-header>
+
+    <ion-item button (click)="editLoyaltyProgram()">
+      <ion-icon name="cash-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>Loyalty Program</h2>
+        <p>{{ getLoyaltySummary() }}</p>
+      </ion-label>
+    </ion-item>
+  </ion-list>
+
   <!-- Receipt Settings -->
   <ion-list>
     <ion-list-header>
@@ -153,6 +168,15 @@
         <p>Automatically print receipt after payment</p>
       </ion-label>
       <ion-toggle [(ngModel)]="tempSettings.autoPrint" (ionChange)="saveSettings()"></ion-toggle>
+    </ion-item>
+
+    <ion-item>
+      <ion-icon name="chatbox-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>Show Receipt Options</h2>
+        <p>Show WhatsApp/Email options after payment</p>
+      </ion-label>
+      <ion-toggle [(ngModel)]="tempSettings.showReceiptOptions" (ionChange)="saveSettings()"></ion-toggle>
     </ion-item>
 
     <ion-item button (click)="editNumber('printCopies', 'Number of Copies', printerSettings().printCopies)">
@@ -274,6 +298,14 @@
       <ion-label>
         <h2>Reset Settings</h2>
         <p>Restore default settings</p>
+      </ion-label>
+    </ion-item>
+
+    <ion-item button (click)="resetCatalog()">
+      <ion-icon name="trash-outline" slot="start" color="danger"></ion-icon>
+      <ion-label>
+        <h2>Reset Product Catalog</h2>
+        <p>Delete all products and categories on this device</p>
       </ion-label>
     </ion-item>
   </ion-list>

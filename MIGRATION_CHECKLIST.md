@@ -295,19 +295,27 @@ This document tracks the migration of each page from Ionic 3 to Ionic 8.
 
 ---
 
-## ⏳ Pending Pages (11 remaining)
+### 25. AccountsPage
+- [x] Customer account listing
+- [x] Credit management
+- [x] Payment recording
 
-### Core Functionality (HIGH Priority)
+**Priority:** HIGH
+**Status:** ✅ Complete
 
-25. **AccountsPage**
-   - [ ] Customer account listing
-   - [ ] Credit management
-   - [ ] Payment recording
+---
 
-26. **CustomerDetailsPage**
-   - [ ] Customer information
-   - [ ] Transaction history
-   - [ ] Credit balance
+### 26. CustomerDetailsPage
+- [x] Customer information
+- [x] Transaction history
+- [x] Credit balance
+
+**Priority:** HIGH
+**Status:** ✅ Complete
+
+---
+
+## ⏳ Pending Pages (9 remaining)
 
 ### Settings & Admin (MEDIUM Priority)
 
@@ -431,4 +439,4 @@ Consider creating:
 
 ---
 
-*Last Updated: December 5, 2025*
+*Last Updated: January 2, 2026*

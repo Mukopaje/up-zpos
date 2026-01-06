@@ -84,6 +84,20 @@ export interface Category {
   color?: string;
   icon?: string;
   image_url?: string;
+  menu_id?: string;
+  parent_id?: string;
+  sort_order?: number;
+  active?: number;
+  tenant_id?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MenuRow {
+  id?: string;
+  name: string;
+  description?: string;
+  color?: string;
   sort_order?: number;
   active?: number;
   tenant_id?: string;
@@ -129,6 +143,35 @@ export interface InventoryRow {
   notes?: string;
   created_at?: string;
   created_by: string;
+}
+
+export interface VoidRow {
+  id?: string;
+  sale_id?: string | null;
+  table_id?: string | null;
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  price: number;
+  total: number;
+  reason?: string | null;
+  created_by: string;
+  created_at?: string;
+}
+
+export interface WorkperiodRow {
+  id?: string;
+  name?: string;
+  start_time: string;
+  end_time?: string | null;
+  opened_by: string;
+  closed_by?: string | null;
+  opening_notes?: string | null;
+  closing_notes?: string | null;
+  open_terminal_id?: string | null;
+  close_terminal_id?: string | null;
+  status: 'open' | 'closed';
+  created_at?: string;
 }
 
 export interface RoleRow {
@@ -212,7 +255,10 @@ export class SqliteService {
   private isInitialized = false;
   private initPromise: Promise<void> | null = null;
   private platform: string;
-  private dbName = 'zpos.db';
+  // Use a simple logical name without extension so the
+  // Capacitor/jeep-sqlite web layer can consistently find
+  // the active connection when calling saveToStore.
+  private dbName = 'zpos';
 
   constructor() {
     this.sqlite = new SQLiteConnection(CapacitorSQLite);
@@ -293,15 +339,29 @@ export class SqliteService {
       console.log('Web store initialized successfully');
     } catch (error) {
       console.error('Error initializing web store:', error);
-      // If web store init fails, propagate the error so callers
-      // know that SQLite is not available on web.
-      throw error;
+      console.log('Continuing without SQLite web support');
+      // Continue anyway - the app will work with just PouchDB
     }
   }
 
   async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
       await this.initialize();
+    }
+  }
+
+  // On web, changes to the in-memory SQLite database must be
+  // explicitly persisted to the IndexedDB-backed store using
+  // saveToStore. On native platforms this is a no-op.
+  private async saveWebStore(): Promise<void> {
+    if (this.platform !== 'web') {
+      return;
+    }
+
+    try {
+      await this.sqlite.saveToStore(this.dbName);
+    } catch (error) {
+      console.error('Error saving SQLite web store:', error);
     }
   }
 
@@ -401,6 +461,22 @@ export class SqliteService {
         color TEXT,
         icon TEXT,
         image_url TEXT,
+        menu_id TEXT,
+        parent_id TEXT,
+        sort_order INTEGER DEFAULT 0,
+        active INTEGER DEFAULT 1,
+        tenant_id TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    const createMenusTable = `
+      CREATE TABLE IF NOT EXISTS menus (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        color TEXT,
         sort_order INTEGER DEFAULT 0,
         active INTEGER DEFAULT 1,
         tenant_id TEXT,
@@ -432,6 +508,39 @@ export class SqliteService {
         notes TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         created_by TEXT NOT NULL
+      );
+    `;
+
+    const createVoidsTable = `
+      CREATE TABLE IF NOT EXISTS voids (
+        id TEXT PRIMARY KEY,
+        sale_id TEXT,
+        table_id TEXT,
+        product_id TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        quantity REAL NOT NULL,
+        price REAL NOT NULL,
+        total REAL NOT NULL,
+        reason TEXT,
+        created_by TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
+
+    const createWorkperiodsTable = `
+      CREATE TABLE IF NOT EXISTS workperiods (
+        id TEXT PRIMARY KEY,
+        name TEXT,
+        start_time TEXT NOT NULL,
+        end_time TEXT,
+        opened_by TEXT NOT NULL,
+        closed_by TEXT,
+        opening_notes TEXT,
+        closing_notes TEXT,
+        open_terminal_id TEXT,
+        close_terminal_id TEXT,
+        status TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     `;
 
@@ -547,12 +656,17 @@ export class SqliteService {
       CREATE INDEX IF NOT EXISTS idx_outbox_synced ON outbox(synced);
       CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name);
       CREATE INDEX IF NOT EXISTS idx_categories_active ON categories(active);
+      CREATE INDEX IF NOT EXISTS idx_categories_parent ON categories(parent_id);
+      CREATE INDEX IF NOT EXISTS idx_menus_active ON menus(active);
       CREATE INDEX IF NOT EXISTS idx_roles_level ON roles(level);
       CREATE INDEX IF NOT EXISTS idx_terminals_location ON terminals(location);
       CREATE INDEX IF NOT EXISTS idx_tables_terminal ON tables(terminal_id);
       CREATE INDEX IF NOT EXISTS idx_waiters_section ON waiters(section);
       CREATE INDEX IF NOT EXISTS idx_held_terminal ON held_transactions(terminal_id);
       CREATE INDEX IF NOT EXISTS idx_modifier_groups_name ON modifier_groups(name);
+      CREATE INDEX IF NOT EXISTS idx_voids_created_at ON voids(created_at);
+      CREATE INDEX IF NOT EXISTS idx_workperiods_status ON workperiods(status);
+      CREATE INDEX IF NOT EXISTS idx_workperiods_start_time ON workperiods(start_time);
     `;
 
     try {
@@ -561,23 +675,60 @@ export class SqliteService {
       await this.db.execute(createSalesTable);
       await this.db.execute(createUsersTable);
       await this.db.execute(createCategoriesTable);
+      await this.db.execute(createMenusTable);
       await this.db.execute(createOutboxTable);
       await this.db.execute(createInventoryTable);
+      await this.db.execute(createVoidsTable);
       await this.db.execute(createHeldTransactionsTable);
       await this.db.execute(createModifierGroupsTable);
       await this.db.execute(createRolesTable);
       await this.db.execute(createTerminalsTable);
       await this.db.execute(createWaitersTable);
       await this.db.execute(createTablesTable);
+      await this.db.execute(createWorkperiodsTable);
+
+      // Best-effort migration: ensure parent_id and menu_id columns exist on older databases
+      // This must run BEFORE we create indexes that reference these columns.
+      try {
+        const parentExists = await this.columnExists('categories', 'parent_id');
+        if (!parentExists) {
+          await this.db.execute('ALTER TABLE categories ADD COLUMN parent_id TEXT');
+        }
+      } catch (e) {
+        // Ignore errors if the column already exists
+      }
+
+      try {
+        const menuExists = await this.columnExists('categories', 'menu_id');
+        if (!menuExists) {
+          await this.db.execute('ALTER TABLE categories ADD COLUMN menu_id TEXT');
+        }
+      } catch (e) {
+        // Ignore errors if the column already exists
+      }
+
+      // Now that the columns are guaranteed to exist, create indexes including parent_id/menu_id
       await this.db.execute(createIndexes);
-      
-      // Seed default categories if table is empty
-      await this.seedDefaultCategories();
-      
+
       console.log('Database tables created successfully');
     } catch (error) {
       console.error('Error creating tables:', error);
       throw error;
+    }
+  }
+
+  private async columnExists(table: string, column: string): Promise<boolean> {
+    if (!this.db) {
+      return false;
+    }
+
+    try {
+      const result = await this.db.query(`PRAGMA table_info(${table})`);
+      const rows: any[] = result.values || [];
+      return rows.some(row => row.name === column);
+    } catch (error) {
+      console.warn(`Error checking for column ${column} on table ${table}:`, error);
+      return false;
     }
   }
 
@@ -1135,6 +1286,20 @@ export class SqliteService {
     }
   }
 
+  async getMenus(): Promise<MenuRow[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const result = await this.db.query('SELECT * FROM menus ORDER BY sort_order, name');
+      return result.values || [];
+    } catch (error) {
+      console.error('Error getting menus:', error);
+      throw error;
+    }
+  }
+
   async addCategory(category: Category): Promise<string> {
     if (!this.db) {
       throw new Error('Database not initialized');
@@ -1150,8 +1315,8 @@ export class SqliteService {
 
       const query = `
         INSERT INTO categories (
-          id, name, description, color, icon, image_url, sort_order, active, tenant_id, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          id, name, description, color, icon, image_url, menu_id, parent_id, sort_order, active, tenant_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       const params = [
@@ -1161,6 +1326,8 @@ export class SqliteService {
         category.color || null,
         category.icon || null,
         category.image_url || null,
+        category.menu_id || null,
+        category.parent_id || null,
         category.sort_order !== undefined ? category.sort_order : maxOrder + 1,
         category.active !== undefined ? category.active : 1,
         category.tenant_id || null,
@@ -1200,6 +1367,8 @@ export class SqliteService {
           color = ?,
           icon = ?,
           image_url = ?,
+          menu_id = ?,
+          parent_id = ?,
           sort_order = ?,
           active = ?,
           updated_at = ?
@@ -1212,6 +1381,8 @@ export class SqliteService {
         category.color ?? currentCategory.color,
         category.icon ?? currentCategory.icon,
         category.image_url ?? currentCategory.image_url,
+        category.menu_id ?? currentCategory.menu_id ?? null,
+        category.parent_id ?? currentCategory.parent_id ?? null,
         category.sort_order ?? currentCategory.sort_order,
         category.active ?? currentCategory.active,
         now,
@@ -1271,6 +1442,135 @@ export class SqliteService {
       }
     } catch (error) {
       console.error('Error reordering categories:', error);
+      throw error;
+    }
+  }
+
+  // ========== MENU OPERATIONS ==========
+
+  async addMenu(menu: MenuRow): Promise<string> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const id = menu.id || this.generateUUID();
+      const now = new Date().toISOString();
+
+      const maxOrderResult = await this.db.query('SELECT MAX(sort_order) as max_order FROM menus');
+      const maxOrder = maxOrderResult.values?.[0]?.max_order || 0;
+
+      const query = `
+        INSERT INTO menus (
+          id, name, description, color, sort_order, active, tenant_id, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      const params = [
+        id,
+        menu.name,
+        menu.description || null,
+        menu.color || null,
+        menu.sort_order !== undefined ? menu.sort_order : maxOrder + 1,
+        menu.active !== undefined ? menu.active : 1,
+        menu.tenant_id || null,
+        now,
+        now
+      ];
+
+      await this.db.run(query, params);
+
+      await this.addToOutbox('menus', 'INSERT', id, { ...menu, id });
+      return id;
+    } catch (error) {
+      console.error('Error adding menu:', error);
+      throw error;
+    }
+  }
+
+  async updateMenu(id: string, menu: Partial<MenuRow>): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const now = new Date().toISOString();
+      const currentResult = await this.db.query('SELECT * FROM menus WHERE id = ?', [id]);
+      const current = currentResult.values && currentResult.values[0] as MenuRow | undefined;
+
+      if (!current) {
+        throw new Error('Menu not found');
+      }
+
+      const query = `
+        UPDATE menus SET
+          name = ?,
+          description = ?,
+          color = ?,
+          sort_order = ?,
+          active = ?,
+          updated_at = ?
+        WHERE id = ?
+      `;
+
+      const params = [
+        menu.name ?? current.name,
+        menu.description ?? current.description,
+        menu.color ?? current.color,
+        menu.sort_order ?? current.sort_order,
+        menu.active ?? current.active ?? 1,
+        now,
+        id
+      ];
+
+      await this.db.run(query, params);
+
+      const updatedResult = await this.db.query('SELECT * FROM menus WHERE id = ?', [id]);
+      const updated = updatedResult.values && updatedResult.values[0];
+      await this.addToOutbox('menus', 'UPDATE', id, updated);
+    } catch (error) {
+      console.error('Error updating menu:', error);
+      throw error;
+    }
+  }
+
+  async deleteMenu(id: string): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const categoriesUsingMenu = await this.db.query(
+        'SELECT COUNT(*) as count FROM categories WHERE menu_id = ?',
+        [id]
+      );
+
+      const count = categoriesUsingMenu.values?.[0]?.count || 0;
+
+      if (count > 0) {
+        throw new Error(`Cannot delete menu. ${count} categor(y/ies) are assigned to this menu.`);
+      }
+
+      await this.db.run('DELETE FROM menus WHERE id = ?', [id]);
+
+      await this.addToOutbox('menus', 'DELETE', id, { id });
+    } catch (error) {
+      console.error('Error deleting menu:', error);
+      throw error;
+    }
+  }
+
+  async clearAllProductsAndCategories(): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      await this.db.execute('DELETE FROM products');
+      await this.db.execute('DELETE FROM categories');
+      console.log('All products and categories cleared from local SQLite');
+    } catch (error) {
+      console.error('Error clearing products and categories:', error);
       throw error;
     }
   }
@@ -1925,6 +2225,28 @@ export class SqliteService {
     }
   }
 
+  async getTablesByLocation(location: string): Promise<TableRow[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const query = `
+        SELECT t.*
+        FROM tables t
+        JOIN terminals term ON term.id = t.terminal_id
+        WHERE term.location = ?
+        ORDER BY t.number ASC
+      `;
+
+      const result = await this.db.query(query, [location]);
+      return result.values || [];
+    } catch (error) {
+      console.error('Error getting tables by location:', error);
+      throw error;
+    }
+  }
+
   async getTableById(id: string): Promise<TableRow | null> {
     if (!this.db) {
       throw new Error('Database not initialized');
@@ -2118,6 +2440,9 @@ export class SqliteService {
       ];
 
       await this.db.run(query, params);
+      // Persist mutations to the web store so data survives reloads
+      // when running in the browser with jeep-sqlite.
+      await this.saveWebStore();
     } catch (error) {
       console.error('Error adding to outbox:', error);
       // Don't throw - outbox failures shouldn't block local operations
@@ -2223,6 +2548,248 @@ export class SqliteService {
       return id;
     } catch (error) {
       console.error('Error adding inventory record:', error);
+      throw error;
+    }
+  }
+
+  // ========== EMAIL RECEIPT QUEUE (OUTBOX ONLY) ==========
+
+  /**
+   * Queue a receipt email request in the generic outbox.
+   * This is an outbox-only record (no dedicated table); the
+   * backend SyncService will see table_name = 'email_receipts'
+   * and trigger the actual email send via MailService.
+   */
+  async queueEmailReceiptJob(job: {
+    id?: string;
+    orderId: string;
+    orderNumber: string;
+    to: string;
+    businessName: string;
+    customerName?: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    total?: number;
+    paymentMethod?: string;
+    items?: Array<{
+      name?: string;
+      quantity?: number;
+      price?: number;
+      total?: number;
+    }>;
+    currency?: string;
+    storePhone?: string;
+    storeEmail?: string;
+    storeAddress?: string;
+    createdAt?: string;
+  }): Promise<string> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    const id = job.id || this.generateUUID();
+    const createdAt = job.createdAt || new Date().toISOString();
+
+    await this.addToOutbox('email_receipts', 'INSERT', id, {
+      ...job,
+      id,
+      createdAt
+    });
+
+    return id;
+  }
+
+  // ========== VOID OPERATIONS ==========
+
+  async getVoidRecords(limit: number = 200): Promise<VoidRow[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const query = 'SELECT * FROM voids ORDER BY created_at DESC LIMIT ?';
+      const result = await this.db.query(query, [limit]);
+      return (result.values || []) as VoidRow[];
+    } catch (error) {
+      console.error('Error getting void records:', error);
+      throw error;
+    }
+  }
+
+  async addVoidRecord(record: VoidRow): Promise<string> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const id = record.id || this.generateUUID();
+      const now = new Date().toISOString();
+
+      const query = `
+        INSERT INTO voids (
+          id, sale_id, table_id, product_id, product_name,
+          quantity, price, total, reason, created_by, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+
+      const params = [
+        id,
+        record.sale_id || null,
+        record.table_id || null,
+        record.product_id,
+        record.product_name,
+        record.quantity,
+        record.price,
+        record.total,
+        record.reason || null,
+        record.created_by,
+        record.created_at || now
+      ];
+
+      await this.db.run(query, params);
+
+      await this.addToOutbox('voids', 'INSERT', id, {
+        ...record,
+        id,
+        created_at: record.created_at || now
+      });
+
+      return id;
+    } catch (error) {
+      console.error('Error adding void record:', error);
+      throw error;
+    }
+  }
+
+  // ========== WORKPERIOD OPERATIONS ==========
+
+  async getOpenWorkperiod(): Promise<WorkperiodRow | null> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const query = `SELECT * FROM workperiods WHERE status = 'open' ORDER BY start_time DESC LIMIT 1`;
+      const result = await this.db.query(query);
+      const rows = (result.values || []) as WorkperiodRow[];
+      return rows.length > 0 ? rows[0] : null;
+    } catch (error) {
+      console.error('Error getting open workperiod:', error);
+      throw error;
+    }
+  }
+
+  async getRecentWorkperiods(limit: number = 20): Promise<WorkperiodRow[]> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const query = 'SELECT * FROM workperiods ORDER BY start_time DESC LIMIT ?';
+      const result = await this.db.query(query, [limit]);
+      return (result.values || []) as WorkperiodRow[];
+    } catch (error) {
+      console.error('Error getting recent workperiods:', error);
+      throw error;
+    }
+  }
+
+  async addWorkperiod(row: {
+    name?: string;
+    opened_by: string;
+    opening_notes?: string | null;
+    open_terminal_id?: string | null;
+  }): Promise<string> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const id = this.generateUUID();
+      const now = new Date().toISOString();
+
+      const query = `
+        INSERT INTO workperiods (
+          id, name, start_time, end_time,
+          opened_by, closed_by,
+          opening_notes, closing_notes,
+          open_terminal_id, close_terminal_id,
+          status, created_at
+        ) VALUES (?, ?, ?, NULL, ?, NULL, ?, NULL, ?, NULL, 'open', ?)
+      `;
+
+      const params = [
+        id,
+        row.name || null,
+        now,
+        row.opened_by,
+        row.opening_notes || null,
+        row.open_terminal_id || null,
+        now
+      ];
+
+      await this.db.run(query, params);
+
+      await this.addToOutbox('workperiods', 'INSERT', id, {
+        id,
+        ...row,
+        start_time: now,
+        status: 'open',
+        created_at: now
+      });
+
+      return id;
+    } catch (error) {
+      console.error('Error adding workperiod:', error);
+      throw error;
+    }
+  }
+
+  async closeWorkperiod(
+    id: string,
+    data: {
+      closed_by: string;
+      closing_notes?: string | null;
+      close_terminal_id?: string | null;
+    }
+  ): Promise<void> {
+    if (!this.db) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      const now = new Date().toISOString();
+
+      const query = `
+        UPDATE workperiods SET
+          end_time = ?,
+          closed_by = ?,
+          closing_notes = ?,
+          close_terminal_id = ?,
+          status = 'closed'
+        WHERE id = ?
+      `;
+
+      const params = [
+        now,
+        data.closed_by,
+        data.closing_notes || null,
+        data.close_terminal_id || null,
+        id
+      ];
+
+      await this.db.run(query, params);
+
+      await this.addToOutbox('workperiods', 'UPDATE', id, {
+        id,
+        end_time: now,
+        closed_by: data.closed_by,
+        closing_notes: data.closing_notes || null,
+        close_terminal_id: data.close_terminal_id || null,
+        status: 'closed'
+      });
+    } catch (error) {
+      console.error('Error closing workperiod:', error);
       throw error;
     }
   }
@@ -2462,7 +3029,9 @@ export class SqliteService {
       await this.db.execute('DELETE FROM categories');
       await this.db.execute('DELETE FROM outbox');
       await this.db.execute('DELETE FROM inventory');
-        await this.db.execute('DELETE FROM held_transactions');
+      await this.db.execute('DELETE FROM voids');
+      await this.db.execute('DELETE FROM held_transactions');
+      await this.db.execute('DELETE FROM workperiods');
       await this.db.execute('DELETE FROM modifier_groups');
       console.log('All data cleared');
     } catch (error) {

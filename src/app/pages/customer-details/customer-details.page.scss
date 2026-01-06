@@ -1,0 +1,11 @@
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+}
+
+.loading-state p {
+  margin-top: 12px;
+}

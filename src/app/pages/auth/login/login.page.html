@@ -55,6 +55,55 @@
               Register Your Business
             </ion-button>
           </div>
+
+          <div class="forgot-license ion-margin-top ion-text-center">
+            <ion-button fill="clear" size="small" (click)="toggleRecovery()">
+              Forgot your license key?
+            </ion-button>
+          </div>
+
+          <div *ngIf="showRecovery" class="recover-section ion-margin-top">
+            <ion-item>
+              <ion-label position="floating">Owner Email</ion-label>
+              <ion-input
+                type="email"
+                [(ngModel)]="recoverEmail"
+                name="recoverEmail"
+                autocomplete="off"
+              ></ion-input>
+            </ion-item>
+
+            <ion-item>
+              <ion-label position="floating">Owner PIN</ion-label>
+              <ion-input
+                type="password"
+                inputmode="numeric"
+                [(ngModel)]="recoverPin"
+                name="recoverPin"
+                maxlength="6"
+                autocomplete="off"
+              ></ion-input>
+            </ion-item>
+
+            <ion-button
+              expand="block"
+              type="button"
+              color="secondary"
+              class="ion-margin-top"
+              (click)="onRecoverLicense()"
+            >
+              Email My License Key
+            </ion-button>
+
+            <div class="help-text ion-margin-top">
+              <ion-text color="medium">
+                <small>
+                  We will send the license key to the registered owner email if the details match an existing
+                  account.
+                </small>
+              </ion-text>
+            </div>
+          </div>
         </form>
 
         <!-- Step 2: PIN Entry -->

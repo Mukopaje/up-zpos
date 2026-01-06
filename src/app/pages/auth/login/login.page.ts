@@ -62,6 +62,11 @@ export class LoginPage implements OnInit {
   businessName = '';
   isLoading = signal(false);
 
+  // License recovery state
+  showRecovery = false;
+  recoverEmail = '';
+  recoverPin = '';
+
   ngOnInit() {
     this.checkExistingAuth();
     this.checkExistingLicense();
@@ -142,6 +147,45 @@ export class LoginPage implements OnInit {
       await loading.dismiss();
       this.showToast('Login failed. Please try again.');
       console.error('Login error:', error);
+    }
+  }
+
+  toggleRecovery() {
+    this.showRecovery = !this.showRecovery;
+  }
+
+  async onRecoverLicense() {
+    if (!this.recoverEmail) {
+      this.showToast('Please enter the owner email');
+      return;
+    }
+
+    if (!this.recoverPin || this.recoverPin.length < 4) {
+      this.showToast('Please enter the owner PIN (4-6 digits)');
+      return;
+    }
+
+    const loading = await this.loadingCtrl.create({
+      message: 'Sending license details...',
+    });
+    await loading.present();
+
+    try {
+      const result = await this.authService.recoverLicenseKey(this.recoverEmail, this.recoverPin);
+      await loading.dismiss();
+      this.showToast(result.message, result.success ? 'success' : 'danger');
+
+      if (result.success) {
+        // Reset recovery state and return to normal license entry view
+        this.showRecovery = false;
+        this.recoverEmail = '';
+        this.recoverPin = '';
+        this.step = 'license';
+      }
+    } catch (error) {
+      await loading.dismiss();
+      this.showToast('Unable to process license recovery. Please try again.');
+      console.error('License recovery error:', error);
     }
   }
 

@@ -1,84 +1,112 @@
 <ion-content class="checkout-page">
   <div class="checkout-layout">
     
-    <!-- LEFT COLUMN: Order Summary / Cart -->
+    <!-- LEFT COLUMN: Order Summary / Cart (hidden details on mobile) -->
     <div class="cart-section">
-      
-      <!-- Total Display -->
+      <!-- Total Display (kept on all devices) -->
       <div class="total-display">
         <div class="total-label">Total</div>
         <div class="total-amount">{{ cartSummary().total | number:'1.2-2' }}</div>
       </div>
 
-      <!-- Order Items List -->
-      <div class="items-list">
-        @for (item of cartItems(); track item.product._id) {
-          <div class="order-item">
-            <div class="item-name">{{ item.product.name }}</div>
-            <div class="item-details">
-              <span class="item-qty">{{ item.quantity }}</span>
-              <span class="item-price">{{ item.price | number:'1.2-2' }}</span>
-              <span class="item-total">{{ item.total | number:'1.2-2' }}</span>
+      <!-- Order Items and detailed totals: desktop/tablet only -->
+      @if (!isMobile()) {
+        <div>
+          <!-- Order Items List -->
+          <div class="items-list">
+            @for (item of cartItems(); track item.product._id) {
+              <div class="order-item">
+                <div class="item-name">{{ item.product.name }}</div>
+                <div class="item-details">
+                  <span class="item-qty">{{ item.quantity }}</span>
+                  <span class="item-price">{{ item.price | number:'1.2-2' }}</span>
+                  <span class="item-total">{{ item.total | number:'1.2-2' }}</span>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Summary Totals -->
+          <div class="summary-totals">
+            <div class="summary-row">
+              <span>Subtotal</span>
+              <span>{{ cartSummary().subtotal | number:'1.2-2' }}</span>
             </div>
+            @if (cartSummary().tax > 0) {
+              <div class="summary-row">
+                <span>Tax</span>
+                <span>{{ cartSummary().tax | number:'1.2-2' }}</span>
+              </div>
+            }
+            @if (cartSummary().discount > 0) {
+              <div class="summary-row discount">
+                <span>Discount</span>
+                <span>-{{ cartSummary().discount | number:'1.2-2' }}</span>
+              </div>
+            }
+            @if (loyaltyDiscountAmount() > 0) {
+              <div class="summary-row discount">
+                <span>Loyalty Discount</span>
+                <span>-{{ loyaltyDiscountAmount() | number:'1.2-2' }}</span>
+              </div>
+            }
+            @if (cartSummary().ticketDiscount > 0) {
+              <div class="summary-row discount">
+                <span>Promotion</span>
+                <span>-{{ cartSummary().ticketDiscount | number:'1.2-2' }}</span>
+              </div>
+            }
+            <div class="summary-row total-row">
+              <span>TOTAL</span>
+              <span>{{ cartSummary().total | number:'1.2-2' }}</span>
+            </div>
+            @if (totalPaidSoFar() > 0 || amountPaid() > 0) {
+              <div class="summary-row">
+                <span>Tendered</span>
+                <span>{{ (totalPaidSoFar() + amountPaid()) | number:'1.2-2' }}</span>
+              </div>
+            }
+            @if (remainingBalance() > 0) {
+              <div class="summary-row">
+                <span>Remaining</span>
+                <span>{{ remainingBalance() | number:'1.2-2' }}</span>
+              </div>
+            }
+            @if (change() > 0) {
+              <div class="summary-row change">
+                <span>Change</span>
+                <span>{{ change() | number:'1.2-2' }}</span>
+              </div>
+            }
           </div>
-        }
-      </div>
-
-      <!-- Summary Totals -->
-      <div class="summary-totals">
-        <div class="summary-row">
-          <span>Subtotal</span>
-          <span>{{ cartSummary().subtotal | number:'1.2-2' }}</span>
         </div>
-        @if (cartSummary().tax > 0) {
-          <div class="summary-row">
-            <span>Tax</span>
-            <span>{{ cartSummary().tax | number:'1.2-2' }}</span>
-          </div>
-        }
-        @if (cartSummary().discount > 0) {
-          <div class="summary-row discount">
-            <span>Discount</span>
-            <span>-{{ cartSummary().discount | number:'1.2-2' }}</span>
-          </div>
-        }
-        <div class="summary-row total-row">
-          <span>TOTAL</span>
-          <span>{{ cartSummary().total | number:'1.2-2' }}</span>
-        </div>
-        @if (amountPaid() > 0) {
-          <div class="summary-row">
-            <span>Tendered</span>
-            <span>{{ amountPaid() | number:'1.2-2' }}</span>
-          </div>
-        }
-        @if (change() > 0) {
-          <div class="summary-row change">
-            <span>Change</span>
-            <span>{{ change() | number:'1.2-2' }}</span>
-          </div>
-        }
-      </div>
-
+      }
     </div>
 
-    <!-- MIDDLE COLUMN: Numpad Area -->
+    <!-- MIDDLE COLUMN: Numpad Area (mobile step 1) -->
+    @if (!isMobile() || mobileStep() === 'amount') {
     <div class="numpad-section">
       
       <!-- Amount Display -->
       <div class="amount-display">
         <div class="amount-label">Charged</div>
         <div class="amount-value">{{ amountPaid() }}</div>
+        @if (remainingBalance() > 0) {
+          <div class="amount-remaining">
+            Remaining: {{ remainingBalance() | number:'1.2-2' }}
+          </div>
+        }
       </div>
 
       <div class="numpad-grid">
         
         <!-- LEFT: Quick Amounts (vertical) -->
         <div class="quick-amounts-left">
-          <button class="quick-btn" (click)="setAmount(1)">1</button>
-          <button class="quick-btn" (click)="setAmount(2)">2</button>
-          <button class="quick-btn" (click)="setAmount(5)">5</button>
           <button class="quick-btn" (click)="setAmount(10)">10</button>
+          <button class="quick-btn" (click)="setAmount(50)">50</button>
+          <button class="quick-btn" (click)="setAmount(100)">100</button>
+          <button class="quick-btn" (click)="setAmount(200)">200</button>
+          <button class="quick-btn" (click)="setAmount(500)">500</button>
         </div>
 
         <!-- CENTER: Keypad -->
@@ -103,9 +131,9 @@
 
           <!-- Below Keypad: Discount, Round, Print Bill -->
           <div class="keypad-bottom-actions">
-            <button class="action-btn">Discount</button>
-            <button class="action-btn">Round</button>
-            <button class="action-btn">Print Bill</button>
+            <button class="action-btn" (click)="openDiscountDialog()">Discount</button>
+            <button class="action-btn" (click)="roundTotal()">Round</button>
+            <button class="action-btn" (click)="printProvisionalBill()">Print Bill</button>
           </div>
         </div>
 
@@ -125,33 +153,116 @@
         <button class="control-btn" (click)="clearAmount()">Clear</button>
       </div>
 
-    </div>
+      <!-- Mobile: proceed to payment methods on a separate step -->
+      @if (isMobile()) {
+        <div class="mobile-next-payment">
+          <button class="payment-btn" (click)="goToPaymentStep()" [disabled]="amountPaid() <= 0">
+            Continue to Payment
+          </button>
+        </div>
+      }
 
-    <!-- RIGHT COLUMN: Payment Methods -->
+    </div>
+    }
+
+    <!-- RIGHT COLUMN: Payment Methods (mobile step 2) -->
+    @if (!isMobile() || mobileStep() === 'payment') {
     <div class="payment-section">
+      @if (isMobile()) {
+        <button class="control-btn" (click)="backToAmountStep()">
+          Back to Amount
+        </button>
+      }
+
+      @if (isMobile()) {
+        <div class="payment-summary-mobile">
+          <div class="summary-row">
+            <span>Tendered</span>
+            <span>{{ totalTendered() | number:'1.2-2' }}</span>
+          </div>
+          @if (change() > 0) {
+            <div class="summary-row change">
+              <span>Change</span>
+              <span>{{ change() | number:'1.2-2' }}</span>
+            </div>
+          }
+          @if (remainingBalance() > 0) {
+            <div class="summary-row remaining">
+              <span>Remaining</span>
+              <span>{{ remainingBalance() | number:'1.2-2' }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <button class="payment-btn secondary" (click)="selectCustomerFromCheckout()">
+        {{ selectedCustomer() ? 'Change Customer' : 'Select Customer' }}
+      </button>
+
+      @if (selectedCustomer()) {
+        <div class="customer-summary">
+          <div class="customer-name">Customer: {{ selectedCustomer()!.name }}</div>
+          @if (selectedCustomerPoints() !== null) {
+            <div class="loyalty-summary">
+              Loyalty points: {{ selectedCustomerPoints() }}
+              @if (loyaltyRedeemValue() > 0) {
+                <span class="loyalty-value">(~ZMW {{ loyaltyRedeemValue() | number:'1.2-2' }})</span>
+              }
+            </div>
+          }
+          <button class="customer-account-link" (click)="viewCustomerAccount()">View account</button>
+        </div>
+      }
+
+      @if (activePromotion()) {
+        <div class="promotion-summary">
+          <div class="promotion-name">Promotion: {{ activePromotion()!.name }}</div>
+          <div class="promotion-detail">
+            {{ activePromotion()!.type === 'PERCENT' ? (activePromotion()!.value + '% off') : ('-' + activePromotion()!.value + ' off') }}
+          </div>
+        </div>
+      }
+
+      <button class="payment-btn secondary" (click)="openPromotionSelector()">
+        Apply Promotion
+      </button>
+
+      <button
+        class="payment-btn secondary"
+        [disabled]="!selectedCustomer() || (selectedCustomerPoints() ?? 0) <= 0 || loyaltyRedeemValue() <= 0"
+        (click)="redeemLoyaltyPoints()">
+        Redeem Points
+      </button>
       
-      <button class="payment-btn" [class.active]="paymentType() === 'cash'" (click)="payWithMethod('cash')">
+      @if (loyaltyEarnRulesNote()) {
+        <div class="loyalty-earn-note">
+          {{ loyaltyEarnRulesNote() }}
+        </div>
+      }
+      
+      <button class="payment-btn" [class.active]="paymentType() === 'cash'" [disabled]="amountPaid() <= 0" (click)="payWithMethod('cash')">
         Cash
       </button>
       
-      <button class="payment-btn" [class.active]="paymentType() === 'card'" (click)="payWithMethod('card')">
+      <button class="payment-btn" [class.active]="paymentType() === 'card'" [disabled]="amountPaid() <= 0" (click)="payWithMethod('card')">
         Card
       </button>
       
-      <button class="payment-btn" [class.active]="paymentType() === 'mobile'" (click)="payWithMethod('mobile')">
+      <button class="payment-btn" [class.active]="paymentType() === 'mobile'" [disabled]="amountPaid() <= 0" (click)="payWithMethod('mobile')">
         Mobile Money
       </button>
       
-      <button class="payment-btn" [class.active]="paymentType() === 'account'" (click)="payWithMethod('account')">
+      <button class="payment-btn" [class.active]="paymentType() === 'account'" [disabled]="amountPaid() <= 0" (click)="payWithMethod('account')">
         Account
       </button>
 
       <!-- Close Button at Bottom -->
       <button class="close-button" (click)="cancelCheckout()">
-        Close
+        Back to Cart
       </button>
 
     </div>
+    }
     
   </div>
 </ion-content>

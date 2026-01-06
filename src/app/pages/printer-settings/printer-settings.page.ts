@@ -104,6 +104,30 @@ export class PrinterSettingsPage implements OnInit {
   // Local settings form
   settings = signal<PrinterSettings>(this.printerSettings());
 
+  // Onboard printers metadata (L156 implemented, others placeholders)
+  readonly onboardPrinterOptions: Array<{
+    id: string;
+    name: string;
+    description: string;
+    driver: Printer['driver'];
+    implemented: boolean;
+  }> = [
+    {
+      id: 'l156',
+      name: 'L156 Onboard Printer',
+      description: 'Built-in receipt printer for the L156 POS device.',
+      driver: 'l156',
+      implemented: true
+    },
+    {
+      id: 'onboard-generic-1',
+      name: 'Onboard Printer (coming soon)',
+      description: 'Future onboard printer model – not implemented yet.',
+      driver: 'custom',
+      implemented: false
+    }
+  ];
+
   constructor() {
     this.registerIcons();
   }
@@ -125,6 +149,139 @@ export class PrinterSettingsPage implements OnInit {
   ngOnInit() {
     // Sync local settings with service
     this.settings.set({ ...this.printerSettings() });
+  }
+
+  /**
+   * Helper to check if current default is an onboard printer
+   */
+  isOnboardDefault(): boolean {
+    const printer = this.defaultPrinter();
+    return !!printer && (printer.printerType === 'OB' || printer.driver === 'l156');
+  }
+
+  /**
+   * Network printer helpers for template
+   */
+  hasNetworkPrinters(): boolean {
+    return this.availablePrinters().some(p => p.printerType === 'Network');
+  }
+
+  networkPrinters(): Printer[] {
+    return this.availablePrinters().filter(p => p.printerType === 'Network');
+  }
+
+  /**
+   * Onboard printers from saved list
+   */
+  onboardPrinters(): Printer[] {
+    return this.availablePrinters().filter(p => p.printerType === 'OB');
+  }
+
+  /**
+   * Use / configure an onboard printer (L156 implemented)
+   */
+  async useOnboardPrinter(optionId: string) {
+    const option = this.onboardPrinterOptions.find(o => o.id === optionId);
+    if (!option) {
+      return;
+    }
+
+    if (!option.implemented) {
+      this.showToast('This onboard printer is not implemented yet.', 'warning');
+      return;
+    }
+
+    // For L156 we create a logical onboard printer entry and set it as default.
+    const now = Date.now();
+    const printer: Printer = {
+      name: option.name,
+      macAddress: option.id,
+      address: option.id,
+      size: '58mm',
+      characters: 32,
+      printing: true,
+      printerType: 'OB',
+      model: option.name,
+      driver: option.driver,
+      connection: 'bluetooth',
+      deviceId: `onboard-${option.id}`,
+      paperCutter: true,
+      cashDrawer: false,
+      categories: [],
+      active: true,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    await this.printService.addPrinter(printer);
+    await this.printService.setDefaultPrinter(printer);
+    this.showToast(`${option.name} set as default printer`, 'success');
+  }
+
+  /**
+   * Add a network (IP) printer manually
+   */
+  async addNetworkPrinter() {
+    const alert = await this.alertCtrl.create({
+      header: 'Add Network Printer',
+      inputs: [
+        {
+          name: 'name',
+          type: 'text',
+          placeholder: 'Printer name (e.g. Kitchen Printer)'
+        },
+        {
+          name: 'address',
+          type: 'text',
+          placeholder: 'IP:Port (e.g. 192.168.0.50:9100)'
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Save',
+          handler: async (data) => {
+            const name = (data.name || '').trim();
+            const address = (data.address || '').trim();
+
+            if (!name || !address) {
+              this.showToast('Name and address are required', 'danger');
+              return false;
+            }
+
+            const printer: Printer = {
+              name,
+              macAddress: address,
+              address,
+              size: '58mm',
+              characters: 32,
+              printing: true,
+              printerType: 'Network',
+              model: 'Generic',
+              deviceId: address,
+              paperCutter: true,
+              cashDrawer: false,
+              categories: [],
+              active: true,
+              driver: 'escpos-generic',
+              connection: 'network',
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            };
+
+            await this.printService.addPrinter(printer);
+            await this.printService.setDefaultPrinter(printer);
+            this.showToast('Network printer saved and set as default', 'success');
+            return true;
+          }
+        }
+      ]
+    });
+
+    await alert.present();
   }
 
   /**

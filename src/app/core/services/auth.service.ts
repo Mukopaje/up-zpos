@@ -54,6 +54,11 @@ export interface RegisterTenantResponse {
   };
 }
 
+export interface RecoverLicenseResponse {
+  success: boolean;
+  message: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -188,8 +193,16 @@ export class AuthService {
   }
 
   async getBusinessSettings(): Promise<{ businessName: string } | null> {
+    // Prefer in-memory license state if it is ever populated
     const license = this.licenseState().license;
-    return license ? { businessName: license.businessName } : null;
+    if (license) {
+      return { businessName: license.businessName };
+    }
+
+    // Fallback to persisted business name from storage (set during
+    // license validation / tenant registration)
+    const storedName = await this.storage.get<string>('businessName');
+    return storedName ? { businessName: storedName } : null;
   }
 
   // Deprecated: Use registerTenant and validateLicense instead
@@ -262,22 +275,44 @@ export class AuthService {
   }
 
   private mapToFriendlyMessage(error: any): string {
-    const httpError = error as HttpErrorResponse;
-    const payload = httpError?.error as any;
-
-    // Check for explicit error code from backend
-    if (payload?.code === 'EMAIL_ALREADY_EXISTS') {
-      return 'An account with this email already exists. Please log in instead, or reset your password if you have forgotten it.';
-    }
-
-    // Fallback to text matching for backward compatibility
-    const raw = (this.extractBackendMessage(error) || '').toLowerCase();
+    const original = this.extractBackendMessage(error) || '';
+    const raw = original.toLowerCase();
 
     if ((raw.includes('duplicate key value') || raw.includes('already exists')) && raw.includes('email')) {
       return 'An account with this email already exists. Please log in instead, or reset your password if you have forgotten it.';
     }
 
+    // If backend already provided a human-friendly message, surface it
+    if (original) {
+      return original;
+    }
+
     return 'Something went wrong. Please try again.';
+  }
+
+  async recoverLicenseKey(ownerEmail: string, pin: string): Promise<RecoverLicenseResponse> {
+    try {
+      const response = await firstValueFrom(
+        this.http.post<RecoverLicenseResponse>(`${this.API_URL}/auth/recover-license`, {
+          ownerEmail,
+          pin,
+        })
+      );
+
+      return (
+        response || {
+          success: true,
+          message:
+            'If an account with this email and PIN exists, we have sent your license key to the registered owner email address.',
+        }
+      );
+    } catch (error) {
+      console.error('License recovery error:', error);
+      return {
+        success: false,
+        message: this.mapToFriendlyMessage(error),
+      };
+    }
   }
 
   /**

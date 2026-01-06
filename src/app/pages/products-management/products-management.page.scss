@@ -11,7 +11,7 @@ ion-searchbar {
   --background: #1a1a1a;
   --color: white;
   --placeholder-color: #999;
-  --icon-color: #30acb4;
+	--icon-color: #30acb4;
 }
 
 ion-segment {
@@ -34,7 +34,7 @@ ion-segment-button {
 
   ion-spinner {
     margin-bottom: 20px;
-    --color: #30acb4;
+		--color: #30acb4;
   }
 }
 
@@ -125,7 +125,7 @@ ion-segment-button {
           font-weight: 500;
 
           &.price {
-            color: #30acb4;
+        color: #30acb4;
             font-weight: 600;
             font-size: 1.1rem;
           }
@@ -190,7 +190,7 @@ ion-segment-button {
         margin-top: 8px;
 
         .price {
-          color: #30acb4;
+        color: #30acb4;
           font-weight: 600;
           font-size: 1rem;
         }

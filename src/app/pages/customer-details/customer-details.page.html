@@ -1,0 +1,106 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/customers"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Customer Details</ion-title>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment [value]="section()" (ionChange)="setSection($any($event.detail.value))">
+      <ion-segment-button value="info">
+        <ion-label>Info</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="orders">
+        <ion-label>Orders</ion-label>
+      </ion-segment-button>
+      <ion-segment-button value="account">
+        <ion-label>Account</ion-label>
+      </ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ng-container *ngIf="customer(); else loading">
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>{{ customer()!.name }}</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <p><strong>Phone:</strong> {{ customer()!.phone }}</p>
+        <p><strong>Email:</strong> {{ customer()!.email || 'N/A' }}</p>
+        <p><strong>Address:</strong> {{ customer()!.address || 'N/A' }}</p>
+      </ion-card-content>
+    </ion-card>
+
+    <ng-container [ngSwitch]="section()">
+      <ng-container *ngSwitchCase="'info'">
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Credit Summary</ion-card-title>
+          </ion-card-header>
+          <ion-card-content *ngIf="stats as s">
+            <p><strong>Credit Limit:</strong> {{ formatCurrency(s.creditLimit) }}</p>
+            <p><strong>Current Balance:</strong> {{ formatCurrency(s.currentBalance) }}</p>
+            <p><strong>Available Credit:</strong> {{ formatCurrency(s.availableCredit) }}</p>
+            <p><strong>Utilization:</strong> {{ s.creditUtilization | number:'1.0-2' }}%</p>
+          </ion-card-content>
+        </ion-card>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'orders'">
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Orders</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <ion-list *ngIf="orders().length > 0; else noOrders">
+              <ion-item *ngFor="let order of orders()">
+                <ion-label>
+                  <h2>{{ order.orderNumber }}</h2>
+                  <p>{{ formatDate(order.createdAt) }}</p>
+                  <p>Payment: {{ getPaymentMethodLabel(order.paymentMethod) }}</p>
+                </ion-label>
+                <ion-text slot="end" color="primary">
+                  <strong>{{ formatCurrency(order.total) }}</strong>
+                </ion-text>
+              </ion-item>
+            </ion-list>
+            <ng-template #noOrders>
+              <ion-text color="medium">
+                <p>No orders found for this customer.</p>
+              </ion-text>
+            </ng-template>
+          </ion-card-content>
+        </ion-card>
+      </ng-container>
+
+      <ng-container *ngSwitchCase="'account'">
+        <ion-card>
+          <ion-card-header>
+            <ion-card-title>Account Actions</ion-card-title>
+          </ion-card-header>
+          <ion-card-content *ngIf="stats as s">
+            <p><strong>Current Balance:</strong> {{ formatCurrency(s.currentBalance) }}</p>
+            <p><strong>Available Credit:</strong> {{ formatCurrency(s.availableCredit) }}</p>
+            <ion-button
+              expand="block"
+              color="success"
+              (click)="recordPayment()"
+            >
+              <ion-icon slot="start" name="cash"></ion-icon>
+              Record Payment
+            </ion-button>
+          </ion-card-content>
+        </ion-card>
+      </ng-container>
+    </ng-container>
+  </ng-container>
+
+  <ng-template #loading>
+    <div class="loading-state">
+      <ion-spinner name="crescent"></ion-spinner>
+      <p>Loading customer details...</p>
+    </div>
+  </ng-template>
+</ion-content>

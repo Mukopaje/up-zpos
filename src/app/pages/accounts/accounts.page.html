@@ -1,0 +1,85 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-button (click)="openMenu()">
+        <ion-icon name="menu-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+    <ion-title>Customer Accounts</ion-title>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-searchbar
+      placeholder="Search customers"
+      (ionInput)="onSearchChange($event)"
+      debounce="300"
+      show-clear-button="always"
+    ></ion-searchbar>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>Outstanding Credit</ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <div class="summary-row">
+        <div>
+          <ion-text color="medium">
+            <p>Total Customers with Balance</p>
+          </ion-text>
+          <ion-text>
+            <h2>{{ accounts().length }}</h2>
+          </ion-text>
+        </div>
+        <div class="amount">
+          <ion-text color="medium">
+            <p>Total Outstanding</p>
+          </ion-text>
+          <ion-text color="danger">
+            <h2>{{ formatCurrency(totalOutstanding()) }}</h2>
+          </ion-text>
+        </div>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <ion-list *ngIf="accounts().length > 0; else empty">
+    <ion-item
+      button
+      detail="true"
+      *ngFor="let customer of accounts()"
+      (click)="viewCustomerDetails(customer)"
+    >
+      <ion-icon slot="start" name="person" color="primary"></ion-icon>
+      <ion-label>
+        <h2>{{ customer.name }}</h2>
+        <p>{{ customer.phone }} • {{ customer.email || 'No email' }}</p>
+        <ion-text [color]="getBalanceColor(customer.balance)">
+          <small>Balance: {{ formatCurrency(customer.balance) }}</small>
+        </ion-text>
+      </ion-label>
+      <ion-button
+        slot="end"
+        fill="outline"
+        color="success"
+        (click)="$event.stopPropagation(); recordPayment(customer)"
+      >
+        <ion-icon slot="start" name="cash"></ion-icon>
+        Pay
+      </ion-button>
+    </ion-item>
+  </ion-list>
+
+  <ng-template #empty>
+    <div class="empty-state">
+      <ion-icon name="wallet" color="medium"></ion-icon>
+      <h2>No outstanding customer accounts</h2>
+      <p>Customers with credit balances will appear here.</p>
+    </div>
+  </ng-template>
+</ion-content>

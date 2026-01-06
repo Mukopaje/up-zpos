@@ -1,37 +1,77 @@
+// Outer container keeps content centered vertically
 .pin-container {
-  max-width: 500px;
-  margin: 0 auto;
   height: 100%;
   display: flex;
-  flex-direction: column;
   justify-content: center;
+  align-items: center;
+}
+
+// Inner layout switches between single-column (mobile)
+// and two-column (desktop) layout
+.pin-layout {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.left-panel,
+.right-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.left-panel {
+  justify-content: flex-start;
+}
+
+.right-panel {
+  justify-content: center;
+  align-items: center; // keep content compact and centered
 }
 
 .logo-section {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 
   .logo {
-    max-width: 120px;
+    max-width: 100px;
     height: auto;
     margin-bottom: 1rem;
   }
 
-  h2 {
-    margin: 0.5rem 0;
-    color: var(--ion-color-primary);
-    font-size: 1.8rem;
+  .license-block {
+    margin-top: 0.25rem;
+  }
+
+  .license-label {
+    display: block;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+		color: #30acb4; // ZPOS primary blue
+    opacity: 0.9;
+  }
+
+  .company-name {
+    margin: 0.15rem 0 0.5rem;
+		color: #30acb4; // ZPOS primary blue
+    font-size: 1.6rem;
     font-weight: 600;
   }
 
   p {
     color: var(--ion-text-color);
-    margin: 0.5rem 0 0;
-    font-size: 1rem;
+    margin: 0.25rem 0 0;
+    font-size: 0.95rem;
   }
 }
 
 .pin-card {
+  width: 100%;
+  max-width: 420px; // cap overall PIN + numpad width
+  margin: 0 auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 
   ion-card-title {
@@ -63,6 +103,8 @@
 
 .keypad {
   padding: 0;
+  max-width: 360px; // constrain keypad so horizontal spacing stays compact
+  margin: 0 auto;
 
   ion-button {
     --border-radius: 8px;
@@ -88,25 +130,77 @@
     font-size: 0.875rem;
   }
 }
-
 // Responsive design
-@media (max-width: 576px) {
+// Mobile: single column, logo on top, smaller logo
+@media (max-width: 767px) {
+  .pin-container {
+    padding-top: 3rem;
+    align-items: flex-start;
+  }
+
+  .pin-layout {
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .left-panel {
+    align-items: center;
+  }
+
+  .right-panel {
+    width: 100%;
+  }
+
   .logo-section {
     .logo {
-      max-width: 100px;
+      max-width: 80px;
     }
 
     h2 {
-      font-size: 1.5rem;
+      font-size: 1.4rem;
     }
   }
 
   .keypad ion-button {
-    height: 56px;
-    font-size: 1.3rem;
+    height: 52px;
+    font-size: 1.2rem;
+  }
+
+  .pin-display {
+    padding: 1.25rem 0 0.5rem;
+    min-height: 60px;
   }
 
   .pin-display h1 {
     font-size: 2rem;
+    letter-spacing: 0.6rem;
+  }
+}
+
+// Desktop: two-column layout, logo on the left,
+// PIN card and numpad on the right
+@media (min-width: 768px) {
+  .pin-layout {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .left-panel {
+    flex: 1;
+    align-items: center;
+  }
+
+  .right-panel {
+    flex: 1;
+  }
+
+  .logo-section {
+    .logo {
+      max-width: 140px;
+    }
+
+    h2 {
+      font-size: 1.8rem;
+    }
   }
 }

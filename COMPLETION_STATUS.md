@@ -1,5 +1,5 @@
 # ZPOS Migration - Completion Status
-**Date:** December 13, 2025
+**Date:** January 2, 2026
 **Overall Progress:** 85% Complete
 
 ---
@@ -33,7 +33,7 @@ All critical services are complete and functional:
 
 ---
 
-### ✅ Completed Pages (24/35 - 69%)
+### ✅ Completed Pages (29/35 - 83%)
 
 #### Authentication (3 pages) ✅
 - **LoginPage** - Username/password login
@@ -57,8 +57,10 @@ All critical services are complete and functional:
 - **OrdersPage** - Order history with filtering
 - **OrderDetailsPage** - Order details, reprint, refund
 
-#### Customer Management (1 page) ✅
+#### Customer Management (3 pages) ✅
 - **CustomersPage** - Customer database, credit tracking
+- **AccountsPage** - Customer accounts & credit management
+- **CustomerDetailsPage** - Detailed customer view & history
 
 #### User & Access (3 pages) ✅
 - **UsersPage** - User management, PINs, terminal access
@@ -69,33 +71,27 @@ All critical services are complete and functional:
 - **TablesPage** - Table management, sections, status
 - **WaitersPage** - Waiter management, stats
 
-#### System & Settings (4 pages) ✅
+#### System & Settings (7 pages) ✅
 - **DataLoaderPage** - App initialization
 - **SettingsPage** - Business configuration, POS mode
 - **PrinterSettingsPage** - Printer setup, Bluetooth pairing
 - **ReportsPage** - Sales analytics, reports
 - **ModifierGroupsPage** - Product modifiers
+ - **PromotionsPage** - Promotions configuration & management
+ - **LocationsPage** - Multi-location management
+ - **OnboardingPage** - Initial setup wizard
 
 ---
 
-## ⏳ Remaining Work (11 pages - 15%)
+## ⏳ Remaining Work (6 pages - 17%)
 
-### High Priority (2 pages)
-1. **AccountsPage** - Customer credit account management
-2. **CustomerDetailsPage** - Detailed customer view & history
-
-### Medium Priority (2 pages)
-3. **LocationsPage** - Multi-location management
-4. **OnboardingPage** - Initial setup wizard
-
-### Low Priority (7 pages - Can be modals/inline)
-5. **AddProductPage** - Product creation (can be integrated into ProductsPage)
-6. **AddCategoryPage** - Category creation (can be integrated into CategoriesPage)
-7. **CustomerListPage** - Customer selection (can be modal in checkout)
-8. **QuantityPage** - Quantity input (can be inline in POS)
-9. **PriceEditPage** - Price override (can be inline in checkout)
-10. **PincodePage** - PIN verification (already in PinLoginPage)
-11. **FilterPage** - Filtering UI (already integrated in pages)
+### Low Priority (6 pages - Can be modals/inline)
+3. **AddProductPage** - Product creation (can be integrated into ProductsPage)
+4. **AddCategoryPage** - Category creation (can be integrated into CategoriesPage)
+5. **CustomerListPage** - Customer selection (can be modal in checkout)
+6. **QuantityPage** - Quantity input (can be inline in POS)
+7. **PriceEditPage** - Price override (can be inline in checkout)
+8. **PincodePage** - PIN verification (already in PinLoginPage)
 
 **Note:** Many of these "pages" can be implemented as modals or inline features within existing pages, reducing actual work needed.
 
@@ -116,6 +112,13 @@ All critical services are complete and functional:
 - ✅ Rounding
 - ✅ Customer selection
 - ✅ Order processing
+
+### Loyalty & Promotions ✅
+- ✅ Loyalty program configuration (earn/redeem rates, active flag)
+- ✅ Automatic points awarding on completed sales for customers with an active program
+- ✅ Loyalty points surfaced in Customers and Checkout views
+- ✅ Promotions module with CRUD APIs and a dedicated Promotions page
+- ✅ Ticket-level promotions applied via CartService and reflected in Checkout totals
 
 ### Inventory Management ✅
 - ✅ Stock tracking
@@ -153,6 +156,13 @@ All critical services are complete and functional:
 - ✅ Table status tracking
 - ✅ Order-to-table mapping
 
+### Automation, Print Jobs & Kitchen Tickets ✅
+- ✅ Backend automation engine with events, actions, and rules
+- ✅ `print_jobs` queue populated by automation actions (e.g., kitchen tickets)
+- ✅ Device-side `PrintJobsClientService` to fetch and process pending jobs
+- ✅ App-level polling loop that runs while on POS routes
+- ✅ Kitchen ticket printing fully wired from automation → print_jobs → device printer
+
 ### Printing System ✅
 - ✅ Bluetooth LE printer support
 - ✅ ESC/POS command generation
@@ -183,7 +193,7 @@ All critical services are complete and functional:
 | Category | Complete | Total | % |
 |----------|----------|-------|---|
 | **Services** | 21 | 21 | 100% |
-| **Pages** | 24 | 35 | 69% |
+| **Pages** | 27 | 35 | 77% |
 | **Guards** | 2 | 2 | 100% |
 | **Database** | ✅ | ✅ | 100% |
 | **Routing** | ✅ | ✅ | 100% |
@@ -295,4 +305,4 @@ What's left are mostly administrative/supporting features that don't block core 
 
 ---
 
-*Last Updated: December 13, 2025*
+*Last Updated: January 2, 2026*

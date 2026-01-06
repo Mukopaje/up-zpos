@@ -1,0 +1,49 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/settings"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Suppliers</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="page-padding">
+    <ion-searchbar
+      placeholder="Search suppliers"
+      (ionInput)="onSearchChange($event)"
+      debounce="200">
+    </ion-searchbar>
+
+    <div class="loading-container" *ngIf="isLoading()">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <ion-list *ngIf="!isLoading()">
+      <ion-item *ngFor="let supplier of filteredSuppliers()">
+        <ion-label>
+          <h2>{{ supplier.name }}</h2>
+          <p *ngIf="supplier.contactName">Contact: {{ supplier.contactName }}</p>
+          <p *ngIf="supplier.phone">Phone: {{ supplier.phone }}</p>
+          <p *ngIf="supplier.email">Email: {{ supplier.email }}</p>
+        </ion-label>
+        <ion-button fill="clear" color="medium" (click)="editSupplier(supplier)">
+          <ion-icon name="create"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" color="danger" (click)="deleteSupplier(supplier)">
+          <ion-icon name="trash"></ion-icon>
+        </ion-button>
+      </ion-item>
+    </ion-list>
+  </div>
+
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button color="primary" (click)="addSupplier()">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

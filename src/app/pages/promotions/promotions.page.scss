@@ -1,0 +1,29 @@
+.promotions-page {
+  padding: 16px;
+}
+
+ion-header {
+  --background: var(--ion-color-primary);
+  --color: #fff;
+}
+
+ion-content {
+  --padding-top: 0;
+}
+
+ion-item {
+  --inner-padding-end: 8px;
+}
+
+.promo-name {
+  font-weight: 600;
+}
+
+.promo-meta {
+  font-size: 0.85rem;
+  color: var(--ion-color-medium);
+}
+
+.promo-active-toggle {
+  margin-left: auto;
+}

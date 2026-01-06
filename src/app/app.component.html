@@ -1,5 +1,6 @@
 <ion-app>
-  <ion-split-pane contentId="main-content" [disabled]="menuCollapsed()">
+  <ion-split-pane contentId="main-content" [disabled]="menuCollapsed() || isMenuCompletelyHidden()">
+    @if (!isMenuCompletelyHidden()) {
     <ion-menu contentId="main-content" type="overlay" [class.collapsed]="menuCollapsed()">
       <ion-content>
         <ion-list id="inbox-list">
@@ -53,6 +54,7 @@
         </ion-list>
       </ion-content>
     </ion-menu>
+    }
     
     <ion-router-outlet id="main-content"></ion-router-outlet>
   </ion-split-pane>

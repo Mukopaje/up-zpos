@@ -1,5 +1,5 @@
 # Migration Progress Report
-**Date:** January 2025  
+**Date:** January 2026  
 **Project:** ZPOS-TAB3 → ZPOS-TAB-V8  
 **Status:** Core Management System Complete ✅
 
@@ -56,7 +56,7 @@ Replaced old providers with modern services using signals:
 - Type-safe with TypeScript 5
 - Computed values for derived state
 
-#### 4. Pages Created (24/35+)
+#### 4. Pages Created (29/35+)
 
 | Page | Type | Status | Features |
 |------|------|--------|----------|
@@ -76,6 +76,8 @@ Replaced old providers with modern services using signals:
 | OrdersPage | Transactions | ✅ Complete | Order history, filtering, search |
 | OrderDetailsPage | Transactions | ✅ Complete | Order details, reprint |
 | CustomersPage | Management | ✅ Complete | Customer management |
+| AccountsPage | Management | ✅ Complete | Customer accounts & credit |
+| CustomerDetailsPage | Management | ✅ Complete | Customer credit & history |
 | SettingsPage | System | ✅ Complete | Business config, POS mode selector |
 | PrinterSettingsPage | System | ✅ Complete | Printer configuration |
 | UsersPage | Management | ✅ Complete | CRUD, roles, PIN, terminal access |
@@ -83,8 +85,10 @@ Replaced old providers with modern services using signals:
 | TablesPage | Hospitality | ✅ Complete | Sections, shapes, waiter integration |
 | WaitersPage | Hospitality | ✅ Complete | User linking, stats, performance |
 | TerminalsPage | Management | ✅ Complete | Terminal management |
+| LocationsPage | Management | ✅ Complete | Location selection and terminal grouping |
 | ModifierGroupsPage | Management | ✅ Complete | Product modifiers |
 | ReportsPage | Analytics | ✅ Complete | Sales reports, analytics |
+| PromotionsPage | Management | ✅ Complete | Promotions management |
 
 **Modern UI Features Implemented:**
 - Cards with hover effects
@@ -132,12 +136,12 @@ Created comprehensive guides:
 
 ## 📊 Progress Metrics
 
-### Overall Progress: 85%
+### Overall Progress: 88%
 
 ```
 Foundation:    ████████████████████ 100% (20/20 tasks)
 Core Services: ████████████████████ 100% (21/21 services)
-Pages:         ████████████████▓▓▓▓  69% (24/35 pages)
+Pages:         █████████████████░░░  77% (27/35 pages)
 Guards:        ████████████████████ 100% (2/2 guards)
 Management:    ████████████████████ 100% (Complete)
 POS System:    ████████████████████ 100% (All modes)
@@ -224,14 +228,62 @@ Implemented intelligent routing that adapts to business configuration:
 
 ---
 
+## ✨ Latest Accomplishments (January 2026)
+
+### Unified Hospitality & Category POS Workflow
+- Hospitality tables now act as an **entry point** into the main Category POS flow:
+   - Selecting an occupied or newly seated table loads its items into the shared cart and navigates to `/pos-category`.
+   - Checkout is shared for retail and hospitality; after full payment, hospitality tables are cleared and navigation returns to the hospitality tables view.
+- A hospitality context chip in the Category POS header shows table number, guest count, and waiter, making it clear when the POS is operating against a specific table.
+
+### Kitchen Ticket Printing for Hospitality
+- Implemented **kitchen ticket printing** through the existing `PrintService`:
+   - "Close & Send" from hospitality now prints a simple kitchen chit using the default printer.
+   - Tickets include table number, guests, waiter, timestamp, and only the newly sent items.
+- Kitchen ticket generation is now also driven by backend automation rules that enqueue print jobs into the shared `print_jobs` queue.
+
+### Hospitality Context Service
+- Added a dedicated `HospitalityContextService` to track current hospitality session:
+   - Mode (hospitality vs none), table ID/number, guest name/count, and waiter name.
+- Used by Category POS and Checkout to show context and to correctly clear tables after payment.
+
+### Hospitality Tables Management & Floor Plan (Device)
+- Tables Management enhancements:
+   - Location-scoped tables shared across terminals.
+   - Bulk table creation with `#Section` headers and duplicate protection.
+   - Unassigned/common pool and quick Unassign action to move tables out of sections.
+   - Default T1–T16 seeding per hospitality location on first use.
+- Hospitality POS floor plan view:
+   - New layout mode that renders tables on a floor-plan canvas.
+   - Optional background image from terminal hospitality configuration.
+   - Support for semantic labels (door, counter, bar, restroom, custom) positioned on the plan.
+   - Positions are persisted via the existing `position` field and future `floorPlan` config.
+
+### Automation & Event Engine (Implemented)
+- Implemented a SambaPOS-style **automation engine** in the backend:
+   - Tenant-scoped models for `AutomationEvent`, `AutomationAction`, `AutomationRule`, and optional `AutomationCommand`.
+- `AutomationsService.emitEvent(name, payload)` now looks up matching rules, evaluates conditions, and dispatches to code-level action handlers (e.g., PrintReceipt, PrintKitchenTicket, UpdateTableStatus, CallWebhook).
+- Key events like payment completion now flow through this engine, emitting actions that create `print_jobs` entries and drive downstream behavior.
+
+### Loyalty & Promotions End-to-End
+- Added full **loyalty** support:
+   - Backend loyalty module awards points on completed sales when a customer and active program exist.
+   - Frontend exposes program configuration in Settings and shows customer point balances in Customers and Checkout.
+- Added full **promotions** support:
+   - Backend promotions module with CRUD APIs.
+   - New Promotions page in the app for managing discounts.
+   - Ticket-level promotions are applied via `CartService` and surfaced in Checkout totals.
+
+### Print Jobs Queue & POS Client Integration
+- Implemented a tenant-scoped `print_jobs` queue in the backend, populated by automation actions (e.g., PrintKitchenTicket).
+- On the device, `PrintJobsClientService` periodically pulls pending jobs and delegates to `PrintService` for actual printing.
+- `AppComponent` now starts a lightweight polling loop that only runs on POS routes, ensuring kitchen tickets are processed automatically whenever the terminal is in active POS use.
+
 ## 🎯 Immediate Next Steps
 
-### Week 1: Remaining Pages (11 pages left)
-1. **AccountsPage** - Customer accounts & credit management
-2. **CustomerDetailsPage** - Customer transaction history
-3. **LocationsPage** - Multi-location management
-4. **OnboardingPage** - Initial setup wizard
-5. **MenuPage** - Restaurant menu builder (if needed)
+### Week 1: Remaining Pages (7 pages left)
+1. **OnboardingPage** - Initial setup wizard ✅ (implemented in Angular 17 with invoice settings and POS mode)
+2. **MenuPage** - Restaurant menu builder (if needed)
 
 ### Week 2: Polish & Testing
 6. **Integration Testing** - Test full workflows
@@ -258,7 +310,8 @@ Implemented intelligent routing that adapts to business configuration:
 6. ⏳ **Bluetooth Printing** - Configured, needs testing
    - PrintService implemented with Bluetooth LE
    - ESC/POS commands ready
-   - Need physical printer testing
+   - Kitchen ticket printing from Hospitality wired through PrintService
+   - Need physical printer testing (receipts + kitchen tickets)
 7. ⏳ **Data Migration** - Tools needed
 8. ⏳ **Offline sync** - Service ready, needs testing
 
@@ -698,6 +751,6 @@ filteredTables = computed(() => {
 
 ---
 
-*Generated: December 5, 2025*  
+*Last updated: January 2, 2026*  
 *Project: ZPOS-TAB-V8*  
 *Version: 2.0.0-alpha*

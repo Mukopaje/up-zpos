@@ -51,9 +51,12 @@ import {
   pricetagOutline
 } from 'ionicons/icons';
 
-import { PrinterSettings } from '../../models';
+import { PrinterSettings, LoyaltyProgram } from '../../models';
 import { SettingsService, AppSettings } from '../../core/services/settings.service';
 import { StorageService } from '../../core/services/storage.service';
+import { SqliteService } from '../../core/services/sqlite.service';
+import { ProductsService } from '../../core/services/products.service';
+import { LoyaltyServiceClient } from '../../core/services/loyalty.service';
 
 @Component({
   selector: 'app-settings',
@@ -88,6 +91,9 @@ export class SettingsPage implements OnInit {
   private actionSheetCtrl = inject(ActionSheetController);
   settingsService = inject(SettingsService);
   private storage = inject(StorageService);
+  private sqlite = inject(SqliteService);
+  private productsService = inject(ProductsService);
+  private loyaltyService = inject(LoyaltyServiceClient);
 
   printerSettings = signal<PrinterSettings>({
     autoPrint: false,
@@ -108,6 +114,8 @@ export class SettingsPage implements OnInit {
 
   appSettings = this.settingsService.settings;
 
+  loyaltyProgram = signal<LoyaltyProgram | null>(null);
+
   tempSettings: any = {
     autoPrint: false,
     printCopies: 1,
@@ -120,7 +128,8 @@ export class SettingsPage implements OnInit {
     taxRate: 16,
     taxEnabled: false,
     taxMode: 'inclusive',
-    taxName: 'VAT'
+    taxName: 'VAT',
+    showReceiptOptions: true
   };
 
   constructor() {
@@ -159,6 +168,7 @@ export class SettingsPage implements OnInit {
 
   async ngOnInit() {
     await this.loadSettings();
+    await this.loadLoyaltyProgram();
   }
 
   private async loadSettings() {
@@ -181,10 +191,11 @@ export class SettingsPage implements OnInit {
       };
       
       this.printerSettings.set(printerSettings);
+      const appSettings = await this.storage.get<AppSettings>('app-settings');
       
       // Copy to temp settings
       this.tempSettings = {
-        autoPrint: printerSettings.autoPrint,
+        autoPrint: appSettings?.autoPrintReceipt ?? printerSettings.autoPrint,
         printCopies: printerSettings.printCopies,
         openCashDrawer: printerSettings.openCashDrawer,
         paperWidth: printerSettings.paperWidth,
@@ -195,10 +206,20 @@ export class SettingsPage implements OnInit {
         taxRate: await this.storage.get('taxRate') || 16,
         taxEnabled: await this.storage.get('taxEnabled') || false,
         taxMode: await this.storage.get('taxMode') || 'inclusive',
-        taxName: await this.storage.get('taxName') || 'VAT'
+        taxName: await this.storage.get('taxName') || 'VAT',
+        showReceiptOptions: appSettings?.showReceiptModalAfterPayment ?? true
       };
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  }
+
+  private async loadLoyaltyProgram() {
+    try {
+      const program = await this.loyaltyService.loadProgram();
+      this.loyaltyProgram.set(program);
+    } catch (error) {
+      console.error('Error loading loyalty program:', error);
     }
   }
 
@@ -208,7 +229,176 @@ export class SettingsPage implements OnInit {
 
   async handleRefresh(event: any) {
     await this.loadSettings();
+    await this.loadLoyaltyProgram();
     event.target.complete();
+  }
+
+  getLoyaltySummary(): string {
+    const program = this.loyaltyProgram();
+    if (!program) {
+      return 'Not configured';
+    }
+    if (!program.active) {
+      return 'Disabled';
+    }
+    const earn = program.earnRate;
+    const redeem = program.redeemRate;
+    const base = `Earn ${earn} pt(s) per 1 ${this.tempSettings.currency}, redeem ${redeem.toFixed(2)} per point`;
+
+    const extras: string[] = [];
+    const minTotal = program.minTotalForEarn ?? 0;
+    if (minTotal > 0) {
+      extras.push(`min ticket ${this.tempSettings.currency} ${minTotal.toFixed(2)}`);
+    }
+
+    const methods = program.allowedPaymentMethods;
+    if (methods && methods.length > 0) {
+      extras.push(`methods: ${methods.join(', ')}`);
+    }
+
+    if (extras.length === 0) {
+      return base;
+    }
+
+    return `${base} (${extras.join(' · ')})`;
+  }
+
+  async editLoyaltyProgram() {
+    const current = this.loyaltyProgram() || {
+      earnRate: 1,
+      redeemRate: 0.01,
+      active: true,
+      minTotalForEarn: 0,
+      allowedPaymentMethods: null
+    };
+
+    const alert = await this.alertCtrl.create({
+      header: 'Loyalty Program',
+      message: 'Configure how customers earn and redeem points.',
+      inputs: [
+        {
+          name: 'earnRate',
+          type: 'number',
+          label: 'Earn rate',
+          placeholder: 'Points per 1 ' + this.tempSettings.currency,
+          value: current.earnRate.toString(),
+        },
+        {
+          name: 'redeemRate',
+          type: 'number',
+          label: 'Redeem rate',
+          placeholder: this.tempSettings.currency + ' value per point',
+          value: current.redeemRate.toString(),
+        },
+        {
+          name: 'minTotalForEarn',
+          type: 'number',
+          label: 'Minimum ticket total to earn',
+          placeholder: `${this.tempSettings.currency} 0.00`,
+          value: (current.minTotalForEarn ?? 0).toString(),
+        },
+        {
+          name: 'allowCash',
+          type: 'checkbox',
+          label: 'Earn on Cash',
+          checked: !current.allowedPaymentMethods || current.allowedPaymentMethods.includes('cash'),
+        },
+        {
+          name: 'allowCard',
+          type: 'checkbox',
+          label: 'Earn on Card',
+          checked: !current.allowedPaymentMethods || current.allowedPaymentMethods.includes('card'),
+        },
+        {
+          name: 'allowMobile',
+          type: 'checkbox',
+          label: 'Earn on Mobile',
+          checked: !current.allowedPaymentMethods || current.allowedPaymentMethods.includes('mobile'),
+        },
+        {
+          name: 'allowAccount',
+          type: 'checkbox',
+          label: 'Earn on Account (customer credit)',
+          checked: !current.allowedPaymentMethods || current.allowedPaymentMethods.includes('account'),
+        },
+        {
+          name: 'active',
+          type: 'checkbox',
+          label: 'Program Active',
+          checked: current.active,
+        }
+      ],
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Save',
+          handler: async (data: any) => {
+            const earnRate = parseFloat(data.earnRate);
+            const redeemRate = parseFloat(data.redeemRate);
+            const minTotalForEarn = parseFloat(data.minTotalForEarn || '0');
+            if (isNaN(earnRate) || earnRate <= 0) {
+              await this.showToast('Enter a valid earn rate');
+              return false;
+            }
+            if (isNaN(redeemRate) || redeemRate <= 0) {
+              await this.showToast('Enter a valid redeem rate');
+              return false;
+            }
+
+            if (isNaN(minTotalForEarn) || minTotalForEarn < 0) {
+              await this.showToast('Enter a valid minimum ticket total');
+              return false;
+            }
+
+            const active = !!data.active;
+
+            const allowedMethods: string[] = [];
+            if (data.allowCash) {
+              allowedMethods.push('cash');
+            }
+            if (data.allowCard) {
+              allowedMethods.push('card');
+            }
+            if (data.allowMobile) {
+              allowedMethods.push('mobile');
+            }
+            if (data.allowAccount) {
+              allowedMethods.push('account');
+            }
+
+            // If all methods are selected (or none), treat as no
+            // restriction and send null so backend interprets it as
+            // "all payment methods eligible".
+            const normalizedAllowed =
+              allowedMethods.length === 0 || allowedMethods.length === 4
+                ? null
+                : allowedMethods;
+
+            try {
+              const saved = await this.loyaltyService.saveProgram({
+                earnRate,
+                redeemRate,
+                active,
+                minTotalForEarn,
+                allowedPaymentMethods: normalizedAllowed
+              });
+              this.loyaltyProgram.set(saved);
+              await this.showToast('Loyalty program updated');
+              return true;
+            } catch (error) {
+              console.error('Error saving loyalty program:', error);
+              await this.showToast('Failed to save loyalty program');
+              return false;
+            }
+          }
+        }
+      ]
+    });
+
+    await alert.present();
   }
 
   async editBusinessInfo() {
@@ -404,6 +594,16 @@ export class SettingsPage implements OnInit {
       await this.storage.set('taxEnabled', this.tempSettings.taxEnabled);
       await this.storage.set('taxMode', this.tempSettings.taxMode);
       await this.storage.set('taxName', this.tempSettings.taxName);
+
+      // Keep core app settings in sync for checkout/printing behavior
+      const appSettings: Partial<AppSettings> = {
+        autoPrintReceipt: this.tempSettings.autoPrint,
+        showLogoOnReceipt: this.tempSettings.printLogo,
+        currency: this.tempSettings.currency,
+        taxRate: this.tempSettings.taxRate,
+        showReceiptModalAfterPayment: this.tempSettings.showReceiptOptions
+      };
+      await this.settingsService.updateSettings(appSettings);
     } catch (error) {
       console.error('Error saving settings:', error);
       await this.showToast('Failed to save settings');
@@ -587,6 +787,45 @@ export class SettingsPage implements OnInit {
           }
         }
       ]
+    });
+
+    await alert.present();
+  }
+
+  async resetCatalog() {
+    const alert = await this.alertCtrl.create({
+      header: 'Reset Product Catalog',
+      message:
+        'This will permanently delete all products and categories on this device. You cannot undo this. Continue?',
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel',
+        },
+        {
+          text: 'Reset',
+          role: 'destructive',
+          handler: async () => {
+            const loading = await this.loadingCtrl.create({
+              message: 'Resetting catalog...',
+            });
+            await loading.present();
+
+            try {
+              await this.sqlite.ensureInitialized();
+              await this.sqlite.clearAllProductsAndCategories();
+              await this.productsService.loadProducts();
+              await this.productsService.loadCategories();
+              await this.showToast('Catalog reset successfully');
+            } catch (error) {
+              console.error('Error resetting catalog:', error);
+              await this.showToast('Failed to reset catalog');
+            } finally {
+              await loading.dismiss();
+            }
+          },
+        },
+      ],
     });
 
     await alert.present();

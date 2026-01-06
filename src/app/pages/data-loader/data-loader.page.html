@@ -1,15 +1,43 @@
 <ion-content [fullscreen]="true" class="ion-padding">
-  <div class="loader-container">
-    <div class="logo-section">
-      <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
-    </div>
+  <ng-container *ngIf="showSetupChoice(); else loadingTemplate">
+    <div class="loader-container">
+      <div class="logo-section">
+        <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
+      </div>
 
-    <div class="loading-section">
-      <ion-spinner name="crescent" color="primary"></ion-spinner>
-      <ion-text color="medium">
-        <p>{{ loadingMessage() }}</p>
-      </ion-text>
-      <ion-progress-bar [value]="progress()" color="primary"></ion-progress-bar>
+      <div class="loading-section">
+        <ion-text color="dark">
+          <h2>How would you like to start?</h2>
+          <p>
+            You can explore ZPOS with sample categories and products, or start with an
+            empty catalog and add/import your own items.
+          </p>
+        </ion-text>
+
+        <ion-button expand="block" color="primary" (click)="startWithSampleData()">
+          Use sample data (for testing)
+        </ion-button>
+
+        <ion-button expand="block" fill="outline" color="medium" (click)="startWithEmptyData()">
+          Start with empty catalog
+        </ion-button>
+      </div>
     </div>
-  </div>
+  </ng-container>
+
+  <ng-template #loadingTemplate>
+    <div class="loader-container">
+      <div class="logo-section">
+        <img src="assets/images/zpos-logo.png" alt="ZPOS Logo" class="logo" />
+      </div>
+
+      <div class="loading-section">
+        <ion-spinner name="crescent" color="primary"></ion-spinner>
+        <ion-text color="medium">
+          <p>{{ loadingMessage() }}</p>
+        </ion-text>
+        <ion-progress-bar [value]="progress()" color="primary"></ion-progress-bar>
+      </div>
+    </div>
+  </ng-template>
 </ion-content>

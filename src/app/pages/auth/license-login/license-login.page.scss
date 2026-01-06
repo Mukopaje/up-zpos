@@ -1,3 +1,36 @@
+// Outer layout
+.login-page {
+  min-height: 100%;
+  padding: 1.5rem 1rem 1rem;
+}
+
+// Inner layout: stacks on mobile, splits on desktop
+.login-layout {
+  width: 100%;
+  max-width: 1000px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  margin: 0 auto;
+}
+
+.left-panel,
+.right-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.left-panel {
+  justify-content: center;
+  align-items: center;
+}
+
+.right-panel {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+// Legacy single-column container (mobile fallback)
 .login-container {
   max-width: 500px;
   margin: 0 auto;
@@ -18,20 +51,23 @@
   }
 
   h1 {
-    margin: 0.5rem 0;
+    margin: 0.25rem 0;
     color: var(--ion-color-primary);
-    font-size: 2.5rem;
+    font-size: 2.2rem;
     font-weight: 600;
   }
 
   p {
     color: var(--ion-text-color);
     margin: 0.5rem 0 0;
-    font-size: 1.1rem;
+    font-size: 1rem;
+    max-width: 320px;
   }
 }
 
 .login-card {
+  width: 100%;
+  max-width: 420px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
 
   ion-card-title {
@@ -43,6 +79,12 @@
     margin-bottom: 1.5rem;
     font-size: 0.95rem;
   }
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
 }
 
 ion-item {
@@ -88,6 +130,15 @@ ion-button[type="submit"] {
 
 // Responsive design
 @media (max-width: 576px) {
+  .login-layout {
+    max-width: 100%;
+  }
+
+  .login-container {
+    padding-top: 3rem;
+    justify-content: flex-start;
+  }
+
   .logo-section {
     margin-bottom: 1.5rem;
 
@@ -108,5 +159,17 @@ ion-button[type="submit"] {
     ion-card-title {
       font-size: 1.1rem;
     }
+  }
+}
+
+@media (min-width: 768px) {
+  .login-layout {
+    flex-direction: row;
+    align-items: stretch;
+  }
+
+  .left-panel,
+  .right-panel {
+    flex: 1;
   }
 }

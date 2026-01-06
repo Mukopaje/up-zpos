@@ -5,7 +5,8 @@ import {
   IonContent,
   IonSpinner,
   IonText,
-  IonProgressBar
+  IonProgressBar,
+  IonButton
 } from '@ionic/angular/standalone';
 
 import { SettingsService } from '../../core/services/settings.service';
@@ -22,7 +23,8 @@ import { SqliteService } from '../../core/services/sqlite.service';
     IonContent,
     IonSpinner,
     IonText,
-    IonProgressBar
+    IonProgressBar,
+    IonButton
   ]
 })
 export class DataLoaderPage implements OnInit {
@@ -33,12 +35,46 @@ export class DataLoaderPage implements OnInit {
 
   loadingMessage = signal('Initializing...');
   progress = signal(0);
+  showSetupChoice = signal(false);
 
   async ngOnInit() {
-    await this.initializeApp();
+    try {
+      const choice = await this.settingsService.get('data-setup-choice');
+      if (!choice) {
+        this.showSetupChoice.set(true);
+        return;
+      }
+
+      await this.initializeApp(choice === 'sample');
+    } catch (error) {
+      console.error('Error loading data setup choice:', error);
+      this.showSetupChoice.set(true);
+    }
   }
 
-  private async initializeApp() {
+  async startWithSampleData() {
+    try {
+      await this.settingsService.set('data-setup-choice', 'sample');
+    } catch (error) {
+      console.error('Error saving data setup choice (sample):', error);
+    }
+
+    this.showSetupChoice.set(false);
+    await this.initializeApp(true);
+  }
+
+  async startWithEmptyData() {
+    try {
+      await this.settingsService.set('data-setup-choice', 'empty');
+    } catch (error) {
+      console.error('Error saving data setup choice (empty):', error);
+    }
+
+    this.showSetupChoice.set(false);
+    await this.initializeApp(false);
+  }
+
+  private async initializeApp(useSampleData: boolean) {
     try {
       // Step 1: Initialize SQLite database
       this.loadingMessage.set('Initializing SQLite...');
@@ -59,10 +95,12 @@ export class DataLoaderPage implements OnInit {
       this.progress.set(0.3);
       await this.delay(500);
 
-      // Step 3: Seed sample data
-      this.loadingMessage.set('Loading sample products...');
+      // Step 3: Optionally seed sample data
+      this.loadingMessage.set(useSampleData ? 'Loading sample products...' : 'Skipping sample products...');
       this.progress.set(0.5);
-      await this.seedDataService.seedSampleData();
+      if (useSampleData) {
+        await this.seedDataService.seedSampleData();
+      }
       await this.delay(500);
 
       // Step 4: Load settings
@@ -80,19 +118,31 @@ export class DataLoaderPage implements OnInit {
       this.progress.set(1);
       await this.delay(300);
 
-      // Navigate to appropriate page based on mode
-      const mode = this.settingsService.getMode();
-      console.log('Navigation mode:', mode);
-      
-      if (mode.retail) {
-        this.router.navigate(['/pos-retail'], { replaceUrl: true });
-      } else if (mode.category) {
-        this.router.navigate(['/pos-category'], { replaceUrl: true });
-      } else if (mode.restaurant) {
-        this.router.navigate(['/pos-hospitality'], { replaceUrl: true });
-      } else {
-        // Default to category mode
-        this.router.navigate(['/pos-category'], { replaceUrl: true });
+      // After initialization, run onboarding once before entering POS
+      const onboardingComplete = await this.settingsService.get('onboarding-complete');
+
+      if (!onboardingComplete) {
+        this.router.navigate(['/onboarding'], { replaceUrl: true });
+        return;
+      }
+
+      // Navigate to appropriate page based on configured default POS mode
+      const settings = this.settingsService.settings();
+      const defaultMode = settings.defaultPosMode || 'category';
+
+      console.log('Navigation default POS mode:', defaultMode);
+
+      switch (defaultMode) {
+        case 'retail':
+          this.router.navigate(['/pos-retail'], { replaceUrl: true });
+          break;
+        case 'hospitality':
+          this.router.navigate(['/pos-hospitality'], { replaceUrl: true });
+          break;
+        case 'category':
+        default:
+          this.router.navigate(['/pos-category'], { replaceUrl: true });
+          break;
       }
 
     } catch (error) {
@@ -101,8 +151,18 @@ export class DataLoaderPage implements OnInit {
       
       // Still try to navigate even if there was an error
       await this.delay(1000);
-      // Default to category mode on error
-      this.router.navigate(['/pos-category'], { replaceUrl: true });
+
+      // On error, fall back to default POS mode routing
+      const settings = this.settingsService.settings();
+      const defaultMode = settings.defaultPosMode || 'category';
+
+      this.router.navigate([
+        defaultMode === 'retail'
+          ? '/pos-retail'
+          : defaultMode === 'hospitality'
+          ? '/pos-hospitality'
+          : '/pos-category'
+      ], { replaceUrl: true });
     }
   }
 

@@ -59,8 +59,23 @@
             <div class="category-meta">
               <ion-badge *ngIf="category.active" color="success">Active</ion-badge>
               <ion-badge *ngIf="!category.active" color="medium">Inactive</ion-badge>
+              <ion-badge *ngIf="getSubcategories(category._id).length > 0" color="primary">Has subcategories</ion-badge>
+              <ion-badge *ngIf="getMenuNameForCategory(category)" color="tertiary">
+                Menu: {{ getMenuNameForCategory(category) }}
+              </ion-badge>
+            </div>
+            <div class="category-path" *ngIf="category.parentId">
+              <ion-text color="medium">{{ getCategoryPath(category) }}</ion-text>
             </div>
           </ion-label>
+
+          <ion-button *ngIf="!isReordering()" slot="end" fill="clear" (click)="openAddCategoryDialog(category._id)">
+            <ion-icon name="add-outline"></ion-icon>
+          </ion-button>
+
+          <ion-button *ngIf="!isReordering()" slot="end" fill="clear" (click)="assignMenu(category)">
+            <ion-icon name="restaurant-outline"></ion-icon>
+          </ion-button>
 
           <ion-button *ngIf="!isReordering()" slot="end" fill="clear" (click)="openEditCategoryDialog(category)">
             <ion-icon name="create-outline"></ion-icon>

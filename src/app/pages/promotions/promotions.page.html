@@ -1,0 +1,50 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/settings"></ion-back-button>
+    </ion-buttons>
+    <ion-title>Promotions</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="page-padding">
+    <div class="list-header">
+      <h2>Active Promotions</h2>
+      <p>Configure percentage or amount-based discounts.</p>
+    </div>
+
+    <div class="loading-container" *ngIf="isLoading()">
+      <ion-spinner name="crescent"></ion-spinner>
+    </div>
+
+    <ion-list *ngIf="!isLoading()">
+      <ion-item *ngFor="let promo of promotions()">
+        <ion-label>
+          <h2>{{ promo.name }}</h2>
+          <p *ngIf="promo.description">{{ promo.description }}</p>
+          <p>
+            <strong>{{ promo.type === 'PERCENT' ? (promo.value + '% off') : ('-' + promo.value + ' off') }}</strong>
+            <span *ngIf="!promo.active" class="inactive">(Inactive)</span>
+          </p>
+        </ion-label>
+        <ion-button fill="clear" color="medium" (click)="editPromotion(promo)">
+          <ion-icon name="create"></ion-icon>
+        </ion-button>
+        <ion-button fill="clear" color="danger" (click)="deletePromotion(promo)">
+          <ion-icon name="trash"></ion-icon>
+        </ion-button>
+      </ion-item>
+    </ion-list>
+  </div>
+
+  <ion-fab vertical="bottom" horizontal="end" slot="fixed">
+    <ion-fab-button color="primary" (click)="addPromotion()">
+      <ion-icon name="add"></ion-icon>
+    </ion-fab-button>
+  </ion-fab>
+</ion-content>

@@ -29,6 +29,7 @@ import {
   ModalController,
   ItemReorderEventDetail,
 } from '@ionic/angular/standalone';
+import type { AlertInput } from '@ionic/angular';
 import { addIcons } from 'ionicons';
 import {
   add,
@@ -51,6 +52,7 @@ import {
   footballOutline,
   gameControllerOutline,
   fitnessOutline,
+  restaurantOutline,
 } from 'ionicons/icons';
 import { ProductsService } from '../../core/services/products.service';
 import { Category } from '../../models';
@@ -94,6 +96,7 @@ export class CategoriesPage implements OnInit {
   private modalCtrl = inject(ModalController);
 
   categories = this.productsService.categories;
+  menus = this.productsService.menus;
   searchQuery = signal('');
   isReordering = signal(false);
 
@@ -136,11 +139,13 @@ export class CategoriesPage implements OnInit {
       footballOutline,
       gameControllerOutline,
       fitnessOutline,
+      restaurantOutline,
     });
   }
 
   async ngOnInit() {
     await this.loadCategories();
+    await this.productsService.loadMenus();
   }
 
   async loadCategories() {
@@ -159,6 +164,76 @@ export class CategoriesPage implements OnInit {
 
   getSubcategories(parentId: string): Category[] {
     return this.productsService.getSubcategories(parentId);
+  }
+
+  getCategoryPath(category: Category): string {
+    const hierarchy = this.productsService.getCategoryHierarchy(category._id);
+    return hierarchy.map(c => c.name).join(' / ');
+  }
+
+  getMenuNameForCategory(category: Category): string | null {
+    if (!category.menuId) return null;
+    const menu = this.menus().find(m => m._id === category.menuId);
+    return menu?.name || null;
+  }
+
+  async assignMenu(category: Category) {
+    const menus = this.menus().filter(m => m.active);
+
+    if (menus.length === 0) {
+      await this.showToast('No menus available. Create a menu first.', 'warning');
+      return;
+    }
+
+    const inputs: AlertInput[] = [
+      {
+        name: 'none',
+        type: 'radio',
+        label: 'No menu',
+        value: '',
+        checked: !category.menuId,
+      },
+      ...menus.map<AlertInput>((menu) => ({
+        name: menu._id,
+        type: 'radio',
+        label: menu.name,
+        value: menu._id,
+        checked: category.menuId === menu._id,
+      })),
+    ];
+
+    const alert = await this.alertCtrl.create({
+      header: 'Assign Menu',
+      inputs,
+      buttons: [
+        {
+          text: 'Cancel',
+          role: 'cancel'
+        },
+        {
+          text: 'Save',
+          handler: async (menuId: string) => {
+            try {
+              await this.productsService.updateCategory(
+                category._id,
+                category.name,
+                category.description || '',
+                category.imageUrl || '',
+                category.parentId,
+                menuId || undefined
+              );
+              await this.loadCategories();
+              await this.showToast('Category menu updated', 'success');
+            } catch (error) {
+              console.error('Error updating category menu:', error);
+              await this.showToast('Failed to update category menu', 'danger');
+            }
+          }
+        }
+      ]
+    });
+
+    await alert.present();
   }
 
   async openAddCategoryDialog(parentId?: string) {
@@ -209,7 +284,8 @@ export class CategoriesPage implements OnInit {
       await this.productsService.createCategory(
         data.name.trim(),
         data.description?.trim() || '',
-        '' // imageBase64 - can be added later
+        '', // imageBase64 - can be added later
+        parentId
       );
       await this.loadCategories();
       await this.showToast('Category added successfully', 'success');

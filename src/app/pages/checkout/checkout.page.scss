@@ -5,8 +5,10 @@
 
 .checkout-layout {
   display: grid;
-  grid-template-columns: 30% 50% 20%;
-  height: 100vh;
+  /* Left: order list, Middle: numpad, Right: payments */
+  grid-template-columns: 36% 40% 24%;
+  height: 100%;
+  max-height: 100vh;
   overflow: hidden;
   background: #2a2a2a;
 }
@@ -23,7 +25,7 @@
 
 .total-display {
   background: #1f1f1f;
-  padding: 20px;
+  padding: 14px 16px;
   text-align: left;
   border-bottom: 1px solid #3a3a3a;
   
@@ -34,7 +36,7 @@
   }
   
   .total-amount {
-    font-size: 42px;
+    font-size: 32px;
     font-weight: 700;
     color: white;
   }
@@ -43,7 +45,7 @@
 .items-list {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 10px 14px;
   
   &::-webkit-scrollbar {
     width: 6px;
@@ -101,7 +103,7 @@
 
 .summary-totals {
   background: #1f1f1f;
-  padding: 16px 20px;
+  padding: 12px 16px;
   border-top: 1px solid #3a3a3a;
 }
 
@@ -134,7 +136,7 @@
 // ========== MIDDLE COLUMN: Numpad Area ==========
 .numpad-section {
   background: #2a2a2a;
-  padding: 20px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -145,7 +147,7 @@
   background: #1f1f1f;
   border: 1px solid #3a3a3a;
   border-radius: 4px;
-  padding: 16px 20px;
+  padding: 12px 14px;
   text-align: right;
   
   .amount-label {
@@ -156,24 +158,34 @@
   }
   
   .amount-value {
-    font-size: 36px;
+    font-size: 26px;
     font-weight: 600;
     color: white;
-    min-height: 45px;
+    min-height: 40px;
+  }
+
+  .amount-remaining {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #cccccc;
+    text-align: right;
   }
 }
 
 .numpad-grid {
   display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 12px;
-  align-items: start;
+  /* Slimmer side columns, wide central keypad similar to reference */
+  grid-template-columns: 0.7fr 1.6fr 0.7fr;
+  gap: 16px;
+  align-items: stretch;
+  flex: 1;
 }
 
 .quick-amounts-left {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  height: 100%;
 }
 
 .quick-btn {
@@ -181,12 +193,13 @@
   color: white;
   border: none;
   border-radius: 4px;
-  padding: 18px 20px;
-  font-size: 16px;
-  font-weight: 600;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
   min-width: 60px;
+  flex: 1;
   
   &:hover {
     background: #2a99a3;
@@ -200,13 +213,14 @@
 .keypad-center {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  height: 100%;
 }
 
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 10px;
 }
 
 .key-button {
@@ -214,7 +228,7 @@
   border: 1px solid #4a4a4a;
   border-radius: 4px;
   padding: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 500;
   color: white;
   cursor: pointer;
@@ -223,7 +237,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 60px;
+  min-height: 80px;
   
   &:hover {
     background: #454545;
@@ -238,15 +252,15 @@
 .keypad-bottom-actions {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 10px;
 }
 
 .action-btn {
   background: #3a3a3a;
   border: 1px solid #4a4a4a;
   border-radius: 4px;
-  padding: 14px 10px;
-  font-size: 13px;
+  padding: 16px 12px;
+  font-size: 14px;
   font-weight: 500;
   color: white;
   cursor: pointer;
@@ -265,19 +279,21 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  height: 100%;
 }
 
 .split-btn {
   background: #3a3a3a;
   border: 1px solid #4a4a4a;
   border-radius: 4px;
-  padding: 18px 16px;
+  padding: 14px 16px;
   font-size: 14px;
   font-weight: 500;
   color: white;
   cursor: pointer;
   transition: all 0.15s;
   min-width: 70px;
+  flex: 1;
   
   &:hover {
     background: #454545;
@@ -298,8 +314,8 @@
   background: #3a3a3a;
   border: 1px solid #4a4a4a;
   border-radius: 4px;
-  padding: 14px;
-  font-size: 14px;
+  padding: 10px 12px;
+  font-size: 13px;
   font-weight: 500;
   color: white;
   cursor: pointer;
@@ -317,10 +333,77 @@
 // ========== RIGHT COLUMN: Payment Methods ==========
 .payment-section {
   background: #2a2a2a;
-  padding: 20px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+}
+
+.payment-summary-mobile {
+  background: #1f1f1f;
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+}
+
+.payment-summary-mobile .summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 2px 0;
+  color: #cccccc;
+}
+
+.payment-summary-mobile .summary-row.change {
+  color: #4caf50;
+  font-weight: 600;
+}
+
+.payment-summary-mobile .summary-row.remaining {
+  color: #ffb74d;
+}
+
+.customer-summary {
+  background: #1f1f1f;
+  border-radius: 4px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.customer-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.loyalty-summary {
+  font-size: 13px;
+  color: #cccccc;
+}
+
+.loyalty-value {
+  margin-left: 4px;
+  color: #30acb4;
+}
+
+.loyalty-earn-note {
+  font-size: 12px;
+  color: #bbbbbb;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.customer-account-link {
+  background: transparent;
+  border: none;
+  color: #8ab4ff;
+  font-size: 12px;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
 }
 
 .payment-btn {
@@ -328,11 +411,12 @@
   color: white;
   border: 1px solid #4a4a4a;
   border-radius: 4px;
-  padding: 18px 16px;
+  padding: 16px 18px;
   font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
+  min-height: 56px;
   
   &:hover {
     background: #454545;
@@ -349,6 +433,11 @@
     &:hover {
       background: #2a99a3;
     }
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
   }
 }
 
@@ -384,6 +473,11 @@
   .checkout-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
+    height: 100vh;
+    max-height: 100vh;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .cart-section {
@@ -395,12 +489,43 @@
   
   .numpad-section {
     order: 2;
+    flex: 1 1 auto;
     border-right: none;
     border-bottom: 1px solid #3a3a3a;
+    padding: 10px 12px;
   }
   
   .payment-section {
     order: 3;
+  }
+
+  .numpad-grid {
+    grid-template-columns: 0.7fr 1.6fr 0.7fr;
+    gap: 10px;
+  }
+
+  .key-button {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .amount-display {
+    padding: 8px 10px;
+  }
+
+  .amount-display .amount-value {
+    font-size: 20px;
+    min-height: 28px;
+  }
+
+  .mobile-next-payment {
+    margin-top: auto;
+    padding-top: 10px;
+  }
+
+  .mobile-next-payment .payment-btn {
+    width: 100%;
+    display: block;
   }
 }
 

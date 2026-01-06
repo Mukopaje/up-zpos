@@ -44,11 +44,13 @@ import {
   close,
   create,
   trash,
-  arrowBack
+  arrowBack,
+  star
 } from 'ionicons/icons';
 
 import { CustomersService } from '../../core/services/customers.service';
 import { Customer } from '../../models';
+import { LoyaltyServiceClient } from '../../core/services/loyalty.service';
 
 @Component({
   selector: 'app-customers',
@@ -91,6 +93,7 @@ export class CustomersPage implements OnInit {
   private alertCtrl = inject(AlertController);
   private toastCtrl = inject(ToastController);
   private modalCtrl = inject(ModalController);
+  private loyaltyService = inject(LoyaltyServiceClient);
 
   // State
   customers = this.customersService.customers;
@@ -148,7 +151,8 @@ export class CustomersPage implements OnInit {
       close,
       create,
       trash,
-      'arrow-back': arrowBack
+      'arrow-back': arrowBack,
+      star
     });
   }
 
@@ -443,5 +447,26 @@ export class CustomersPage implements OnInit {
 
   goBack() {
     this.navCtrl.back();
+  }
+
+  async showLoyaltyInfo(customer: Customer, event?: Event) {
+    event?.stopPropagation();
+    try {
+      const account = await this.loyaltyService.getAccount(customer._id);
+      const points = account?.pointsBalance ?? 0;
+      const message = points > 0
+        ? `${customer.name} has ${points.toFixed(0)} loyalty points.`
+        : `${customer.name} has no loyalty points yet.`;
+
+      const alert = await this.alertCtrl.create({
+        header: 'Loyalty Points',
+        message,
+        buttons: ['OK']
+      });
+      await alert.present();
+    } catch (error) {
+      console.error('Error loading loyalty points:', error);
+      this.showToast('Failed to load loyalty points', 'danger');
+    }
   }
 }

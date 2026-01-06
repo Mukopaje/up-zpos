@@ -85,9 +85,11 @@ export class PosProductsPage implements OnInit {
   // Reactive state with signals
   products = this.productsService.products;
   categories = this.productsService.categories;
+  menus = this.productsService.menus;
   cartItems = this.cartService.cartItems;
   cartSummary = this.cartService.summary;
   selectedCategory = signal<string>('all');
+  selectedMenuId = signal<string | null>(null);
   searchQuery = signal<string>('');
   isLoading = this.productsService.isLoading;
   isScanning = this.barcodeService.isScanning;
@@ -101,6 +103,23 @@ export class PosProductsPage implements OnInit {
       filtered = filtered.filter(p => p.category === this.selectedCategory());
     }
 
+    // Filter by selected menu (or implicit single menu)
+    const activeMenus = this.activeMenus();
+    const selectedMenuId = this.selectedMenuId();
+
+    if (selectedMenuId) {
+      filtered = filtered.filter(p => {
+        const category = this.categories().find(c => c._id === p.category);
+        return category?.menuId === selectedMenuId;
+      });
+    } else if (activeMenus.length === 1) {
+      const onlyMenuId = activeMenus[0]._id;
+      filtered = filtered.filter(p => {
+        const category = this.categories().find(c => c._id === p.category);
+        return !category?.menuId || category?.menuId === onlyMenuId;
+      });
+    }
+
     // Filter by search query
     const query = this.searchQuery().toLowerCase();
     if (query) {
@@ -111,6 +130,28 @@ export class PosProductsPage implements OnInit {
     }
 
     return filtered;
+  });
+
+  activeMenus = computed(() => this.menus().filter(m => m.active));
+
+  showMenuBar = computed(() => this.activeMenus().length > 1);
+
+  visibleCategories = computed(() => {
+    const activeMenus = this.activeMenus();
+    const selectedMenuId = this.selectedMenuId();
+
+    let result = this.categories();
+
+    if (activeMenus.length > 1) {
+      if (selectedMenuId) {
+        result = result.filter(c => c.menuId === selectedMenuId);
+      }
+    } else if (activeMenus.length === 1) {
+      const onlyMenuId = activeMenus[0]._id;
+      result = result.filter(c => !c.menuId || c.menuId === onlyMenuId);
+    }
+
+    return result;
   });
 
   constructor() {
@@ -132,6 +173,11 @@ export class PosProductsPage implements OnInit {
 
   async ngOnInit() {
     await this.loadData();
+
+    const activeMenus = this.activeMenus();
+    if (activeMenus.length > 0 && !this.selectedMenuId()) {
+      this.selectedMenuId.set(activeMenus[0]._id);
+    }
   }
 
   async ionViewWillEnter() {
@@ -145,6 +191,7 @@ export class PosProductsPage implements OnInit {
       // Just trigger a refresh
       await this.productsService.loadProducts();
       await this.productsService.loadCategories();
+      await this.productsService.loadMenus();
     } catch (error) {
       console.error('Error loading data:', error);
       this.showToast('Error loading products');
@@ -234,6 +281,11 @@ export class PosProductsPage implements OnInit {
 
   selectCategory(categoryId: string) {
     this.selectedCategory.set(categoryId);
+  }
+
+  selectMenu(menuId: string) {
+    this.selectedMenuId.set(menuId);
+    this.selectedCategory.set('all');
   }
 
   addToCart(product: Product) {

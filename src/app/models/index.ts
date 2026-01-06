@@ -106,6 +106,7 @@ export interface Category {
   icon?: string;
   color?: string; // For visual distinction
   imageUrl?: string; // Category tile image
+  menuId?: string; // Menu this category belongs to (Kitchen, Bar, etc.)
   parentId?: string; // For subcategories - ID of parent category
   parentPath?: string[]; // Full path of parent IDs for nested categories [grandparent, parent]
   level?: number; // Category depth: 0=root, 1=first level subcategory, etc.
@@ -113,6 +114,19 @@ export interface Category {
   active: boolean;
   productCount?: number; // Cached count of products in this category
   _attachments?: any;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface Menu {
+  _id: string;
+  _rev?: string;
+  type: 'menu';
+  name: string; // e.g. "Kitchen", "Bar", "Drinks", "Breakfast"
+  description?: string;
+  color?: string; // Tile color for this menu in POS
+  active: boolean;
+  order: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -193,6 +207,7 @@ export interface Order {
   tableId?: string; // For hospitality
   roomId?: string; // For hotels
   waiterId?: string; // For hospitality
+    covers?: number; // Number of guests/covers for hospitality
   latitude?: number;
   longitude?: number;
   accuracy?: number;
@@ -452,6 +467,10 @@ export interface Terminal {
       receipt?: string; // Receipt printer ID
       kitchen?: { [category: string]: string }; // Category -> Printer mapping
     };
+    floorPlan?: {
+      backgroundImageUrl?: string;
+      labels?: FloorLabel[];
+    };
   };
   printerAddress?: string; // Default printer
   ipAddress?: string;
@@ -469,6 +488,14 @@ export interface Terminal {
   createdBy: string;
 }
 
+export interface FloorLabel {
+  id: string;
+  type: 'door' | 'counter' | 'bar' | 'restroom' | 'custom';
+  text?: string;
+  x: number; // 0-1 normalized position horizontally
+  y: number; // 0-1 normalized position vertically
+}
+
 export interface Printer {
   _id?: string;
   _rev?: string;
@@ -481,6 +508,8 @@ export interface Printer {
   printing: boolean; // Enable/disable printing
   printerType: 'BT' | 'USB' | 'Network' | 'OB'; // Bluetooth, USB, Network, Onboard
   model: string; // 'Generic', 'Datecs', 'Epson', 'Star', etc.
+  driver?: 'escpos-generic' | 'ocom-q1' | 'l156' | 'windows' | 'custom';
+  connection?: 'bluetooth' | 'network' | 'usb' | 'server';
   deviceId?: string;
   paperCutter: boolean;
   cashDrawer: boolean;
@@ -589,4 +618,40 @@ export interface QuickAccess {
   autoUpdate: boolean; // Auto-update based on usage
   createdAt: number;
   updatedAt: number;
+}
+
+// Loyalty & Promotions
+
+export interface LoyaltyProgram {
+  earnRate: number; // points per currency unit spent
+  redeemRate: number; // currency value per point when redeeming
+  active: boolean;
+
+  // Advanced earning rules (optional and backward-compatible)
+  // Minimum ticket total required before any points are awarded.
+  minTotalForEarn?: number;
+
+  // Optional whitelist of payment methods that are allowed to
+  // earn points (e.g. ['cash', 'card']). When omitted or empty,
+  // all payment methods can earn points.
+  allowedPaymentMethods?: string[] | null;
+}
+
+export interface LoyaltyAccount {
+  customerId: string;
+  pointsBalance: number;
+}
+
+export type PromotionType = 'PERCENT' | 'AMOUNT';
+
+export interface Promotion {
+  id: string;
+  name: string;
+  description?: string;
+  type: PromotionType;
+  value: number;
+  startDate?: string;
+  endDate?: string;
+  active: boolean;
+  conditions?: any;
 }

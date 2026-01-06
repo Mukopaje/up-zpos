@@ -44,12 +44,9 @@
       }
       
       @if (!isMobile()) {
-        <ion-searchbar
-          placeholder="Search products..."
-          [debounce]="300"
-          (ionInput)="onSearchChange($event)"
-          class="header-search"
-        ></ion-searchbar>
+        <ion-button slot="end" fill="clear" (click)="toggleKeypad()">
+          <ion-icon name="keypad-outline"></ion-icon>
+        </ion-button>
         <ion-button slot="end" fill="clear" (click)="scanBarcode()" [disabled]="isScanning()">
           @if (isScanning()) {
             <ion-spinner name="crescent"></ion-spinner>
@@ -57,6 +54,26 @@
             <ion-icon name="barcode"></ion-icon>
           }
         </ion-button>
+        @if (currentMenu()) {
+          <ion-chip slot="end" color="light" class="menu-chip">
+            <ion-icon name="restaurant-outline"></ion-icon>
+            <ion-label>{{ currentMenu()!.name }}</ion-label>
+          </ion-chip>
+        }
+        @if (hospitalityContext.mode() === 'hospitality') {
+          <ion-chip slot="end" color="warning" class="hospitality-chip">
+            <ion-icon name="restaurant-outline"></ion-icon>
+            <ion-label>
+              Table {{ hospitalityContext.tableNumber() }}
+              @if (hospitalityContext.guestCount()) {
+                - {{ hospitalityContext.guestCount() }} guests
+              }
+              @if (hospitalityContext.waiterName()) {
+                - {{ hospitalityContext.waiterName() }}
+              }
+            </ion-label>
+          </ion-chip>
+        }
       }
     }
   </ion-toolbar>
@@ -318,94 +335,252 @@
             }
           </div>
 
-          @if (cartItems().length === 0) {
-            <div class="empty-cart">
-              <ion-icon name="cart" color="medium"></ion-icon>
-              <h3>Cart is empty</h3>
-              <p>Add products to get started</p>
-            </div>
-          } @else {
-            <ion-card class="cart-items-card">
-              <ion-card-content>
-                <ion-list lines="full">
-                  <ion-item *ngFor="let item of cartItems()" (press)="editCartItem(item)">
-                    <div class="cart-item-new">
-                      <div class="item-info">
-                        <h3>{{ item.product.name }}</h3>
-                        @if (item.selectedVariant) {
-                          <p class="item-option">{{ item.selectedVariant.name }}</p>
-                        }
-                        @if (item.selectedPortion) {
-                          <p class="item-option">{{ item.selectedPortion.name }}</p>
-                        }
-                        @if (item.modifiers && item.modifiers.length > 0) {
-                          <p class="item-modifiers">
-                            @for (mod of item.modifiers; track mod.groupId) {
-                              <span class="modifier-badge">{{ mod.optionName }}</span>
+          <!-- Selected Customer Banner (always visible in cart view) -->
+          <div class="cart-customer-banner">
+            @if (selectedCustomer()) {
+              <div class="customer-chip">
+                <div class="customer-main">
+                  <ion-icon name="person" class="customer-icon"></ion-icon>
+                  <div class="customer-text">
+                    <div class="customer-name">{{ selectedCustomer()!.name }}</div>
+                    <div class="customer-meta">
+                      @if (selectedCustomer()!.phone) {
+                        <span>{{ selectedCustomer()!.phone }}</span>
+                      }
+                      @if (selectedCustomer()!.balance > 0 || selectedCustomer()!.creditLimit > 0) {
+                        <span>
+                          
+                          @if (selectedCustomer()!.balance > 0) {
+                            Balance: ZMW {{ selectedCustomer()!.balance | number:'1.2-2' }}
+                          }
+                          @if (selectedCustomer()!.creditLimit > 0) {
+                            
+                            @if (selectedCustomer()!.balance > 0) {
+                              
+                              ·
                             }
-                          </p>
-                        }
-                      </div>
-                      
-                      <div class="item-right">
-                        <div class="quantity-total">
-                          <span class="qty">{{ item.quantity }}x</span>
-                          <strong class="line-total">ZMW {{ item.total | number:'1.2-2' }}</strong>
-                        </div>
-                      </div>
+                            Credit: ZMW {{ (selectedCustomer()!.creditLimit - selectedCustomer()!.balance) | number:'1.2-2' }}
+                          }
+                        </span>
+                      }
                     </div>
-                  </ion-item>
-                </ion-list>
-              </ion-card-content>
-            </ion-card>
-
-            <div class="cart-footer">
-              <div class="summary-section">
-                <div class="summary-row">
-                  <span>Subtotal:</span>
-                  <span>ZMW {{ cartSummary().subtotal | number:'1.2-2' }}</span>
-                </div>
-                @if (cartSummary().tax > 0) {
-                  <div class="summary-row">
-                    <span>Tax:</span>
-                    <span>ZMW {{ cartSummary().tax | number:'1.2-2' }}</span>
                   </div>
-                }
-                @if (cartSummary().discount > 0) {
-                  <div class="summary-row discount">
-                    <span>Discount:</span>
-                    <span>-ZMW {{ cartSummary().discount | number:'1.2-2' }}</span>
-                  </div>
-                }
-                <div class="summary-row total">
-                  <span>TOTAL:</span>
-                  <strong>ZMW {{ cartSummary().total | number:'1.2-2' }}</strong>
                 </div>
+                <ion-button fill="clear" size="small" (click)="clearCustomer()">
+                  <ion-icon name="close" slot="icon-only"></ion-icon>
+                </ion-button>
               </div>
-              
-              <ion-button
-                expand="block"
-                size="large"
-                color="success"
-                (click)="goToCheckout()"
-                class="checkout-button"
-              >
-                <ion-icon name="card" slot="start"></ion-icon>
-                Proceed to Checkout
-              </ion-button>
+            } @else {
+              <div class="customer-chip empty" (click)="selectCustomer()">
+                <div class="customer-main">
+                  <ion-icon name="person" class="customer-icon"></ion-icon>
+                  <div class="customer-text">
+                    <div class="customer-name">No customer selected</div>
+                    <div class="customer-meta">Tap to select a customer</div>
+                  </div>
+                </div>
+                <ion-button fill="outline" size="small" (click)="selectCustomer(); $event.stopPropagation()">
+                  Select
+                </ion-button>
+              </div>
+            }
+          </div>
+
+          <div class="cart-main-layout">
+            <div class="ticket-side-panel" *ngIf="!isMobile()">
+              <div class="panel-header">
+                <ion-label *ngIf="panelMode() === 'ticket'">Ticket Actions</ion-label>
+                <ion-label *ngIf="panelMode() === 'order'">Item Actions</ion-label>
+                <ion-button
+                  *ngIf="panelMode() === 'order'"
+                  fill="clear"
+                  size="small"
+                  (click)="showTicketPanel()">
+                  <ion-icon name="arrow-back" slot="icon-only"></ion-icon>
+                </ion-button>
+              </div>
+
+              <div class="panel-buttons" *ngIf="panelMode() === 'ticket'">
+                <ion-button
+                  *ngFor="let btn of ticketButtons()"
+                  expand="block"
+                  size="small"
+                  fill="solid"
+                  [color]="btn.color || 'primary'"
+                  [disabled]="isTicketButtonDisabled(btn)"
+                  (click)="handleTicketButton(btn)">
+                  <ion-icon *ngIf="btn.icon" [name]="btn.icon" slot="start"></ion-icon>
+                  {{ btn.label }}
+                </ion-button>
+              </div>
+
+              <div class="panel-buttons" *ngIf="panelMode() === 'order'">
+                <ion-button
+                  *ngFor="let btn of orderButtons()"
+                  expand="block"
+                  size="small"
+                  fill="solid"
+                  [color]="btn.color || 'primary'"
+                  [disabled]="isOrderButtonDisabled(btn)"
+                  (click)="handleOrderButton(btn)">
+                  <ion-icon *ngIf="btn.icon" [name]="btn.icon" slot="start"></ion-icon>
+                  {{ btn.label }}
+                </ion-button>
+              </div>
             </div>
-          }
+
+            <div class="ticket-main">
+              @if (cartItems().length === 0) {
+                <div class="empty-cart">
+                  <ion-icon name="cart" color="medium"></ion-icon>
+                  <h3>Cart is empty</h3>
+                  <p>Add products to get started</p>
+                  <p class="shortcuts">F1: Search | F2: Checkout | F3: Hold | F4: Recall</p>
+                </div>
+              } @else {
+                <ion-card class="cart-items-card">
+                  <ion-card-content>
+                    <ion-list lines="full">
+                      <ion-item
+                        *ngFor="let item of cartItems()"
+                        (click)="onCartItemClick(item)"
+                        (press)="onCartItemPress(item)">
+                        <div
+                          class="cart-item-new"
+                          [class.selected]="selectedCartItem()?.product?._id === item.product._id">
+                          <div class="item-info">
+                            <h3>{{ item.product.name }}</h3>
+                            @if (item.selectedVariant) {
+                              <p class="item-option">{{ item.selectedVariant.name }}</p>
+                            }
+                            @if (item.selectedPortion) {
+                              <p class="item-option">{{ item.selectedPortion.name }}</p>
+                            }
+                            @if (item.modifiers && item.modifiers.length > 0) {
+                              <p class="item-modifiers">
+                                @for (mod of item.modifiers; track mod.groupId) {
+                                  <span class="modifier-badge">{{ mod.optionName }}</span>
+                                }
+                              </p>
+                            }
+                          </div>
+                          
+                          <div class="item-right">
+                            <div class="quantity-total">
+                              <span class="qty">{{ item.quantity }}x</span>
+                              <ng-container *ngIf="item.discount && item.discount > 0; else noDiscount">
+                                <span class="line-original">ZMW {{ (item.total + item.discount) | number:'1.2-2' }}</span>
+                                <span class="line-discount">-ZMW {{ item.discount | number:'1.2-2' }}</span>
+                              </ng-container>
+                              <ng-template #noDiscount></ng-template>
+                              <strong class="line-total">ZMW {{ item.total | number:'1.2-2' }}</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </ion-item>
+                    </ion-list>
+                  </ion-card-content>
+                </ion-card>
+              }
+
+              <div class="cart-footer" *ngIf="hospitalityContext.mode() === 'hospitality' || cartItems().length > 0">
+                  <div class="summary-section">
+                    <div class="summary-row">
+                      <span>Subtotal:</span>
+                      <span>ZMW {{ cartSummary().subtotal | number:'1.2-2' }}</span>
+                    </div>
+                    @if (cartSummary().tax > 0) {
+                      <div class="summary-row">
+                        <span>Tax:</span>
+                        <span>ZMW {{ cartSummary().tax | number:'1.2-2' }}</span>
+                      </div>
+                    }
+                    @if (cartSummary().discount > 0) {
+                      <div class="summary-row discount">
+                        <span>Discount:</span>
+                        <span>-ZMW {{ cartSummary().discount | number:'1.2-2' }}</span>
+                      </div>
+                    }
+                    <div class="summary-row total">
+                      <span>TOTAL:</span>
+                      <strong>ZMW {{ cartSummary().total | number:'1.2-2' }}</strong>
+                    </div>
+                  </div>
+                  
+                  <div class="cart-footer" *ngIf="hospitalityContext.mode() === 'hospitality'; else retailFooter">
+                    <div class="cart-footer-buttons">
+                      <ion-button
+                        expand="block"
+                        color="danger"
+                        (click)="closeTableFromHospitality()">
+                        Close
+                      </ion-button>
+
+                      <ion-button
+                        expand="block"
+                        color="primary"
+                        [disabled]="cartSummary().total <= 0"
+                        (click)="goToCheckout()">
+                        Checkout
+                      </ion-button>
+                    </div>
+                  </div>
+                  <ng-template #retailFooter>
+                    @if (cartItems().length > 0) {
+                      <div class="cart-footer">
+                        <ion-button
+                          expand="block"
+                          color="primary"
+                          [disabled]="cartItems().length === 0"
+                          (click)="goToCheckout()">
+                          Proceed to Checkout
+                        </ion-button>
+                        <ion-button
+                          expand="block"
+                          fill="outline"
+                          [disabled]="cartItems().length === 0"
+                          (click)="holdTransaction()">
+                          Hold (F3)
+                        </ion-button>
+                        <ion-button
+                          expand="block"
+                          fill="clear"
+                          (click)="loadHeldTransactions()">
+                          View Held (F4)
+                        </ion-button>
+                      </div>
+                    }
+                  </ng-template>
+              </div>
+            </div>
+          </div>
         }
         
       </div>
     </div>
 
     <!-- MIDDLE: Categories Section -->
-    <div class="categories-column" 
-         [class.mobile-hidden]="isMobile() && (currentView() !== 'products' || selectedCategory())"
-         [class.checkout-hidden]="currentView() === 'checkout'">
-      <div class="categories-container">
-        <div class="categories-grid">
+        <div class="categories-column" 
+          [class.mobile-hidden]="isMobile() && (currentView() !== 'products' || selectedCategory())"
+          [class.checkout-hidden]="currentView() === 'checkout'">
+       <div class="categories-container"
+         (touchstart)="onCategorySwipeStart($event)"
+         (touchend)="onCategorySwipeEnd($event)">
+        @if (showMenuBar() && isMobile()) {
+          <div class="menu-strip">
+            <button
+              *ngFor="let menu of activeMenus()"
+              class="menu-tile"
+              [class.active]="selectedMenuId() === menu._id"
+              [style.background-color]="menu.color || 'var(--ion-color-primary)'"
+              (click)="selectMenu(menu._id)"
+            >
+              <span class="menu-name">{{ menu.name }}</span>
+            </button>
+          </div>
+        }
+
+        <div class="categories-grid" [class.two-columns]="categoryColumns() === 2">
           <!-- Category Tiles -->
           <div
             *ngFor="let category of paginatedCategories()"
@@ -450,75 +625,120 @@
     <div class="products-column" 
          [class.mobile-hidden]="isMobile() && (currentView() !== 'products' || !selectedCategory())"
          [class.checkout-hidden]="currentView() === 'checkout'">
-      
-      <!-- Global Search Results Overlay -->
-      @if (isGlobalSearchActive() && globalSearchProducts().length > 0) {
-        <div class="search-results-overlay">
-          <div class="search-results-header">
-            <h3>Search Results ({{ globalSearchProducts().length }})</h3>
-            <ion-button fill="clear" size="small" (click)="clearBuffers()">
-              <ion-icon name="close" slot="icon-only"></ion-icon>
-            </ion-button>
-          </div>
-          <ion-list class="search-results-list">
-            <ion-item 
-              *ngFor="let product of globalSearchProducts()" 
-              button 
-              (click)="addProductWithBuffer(product)"
-              lines="full"
-            >
-              <div class="search-result-item">
-                <div class="search-result-main">
-                  <div class="search-result-name">{{ product.name }}</div>
-                  <ion-badge color="medium" class="category-badge">
-                    {{ getCategoryName(product.category) }}
-                  </ion-badge>
-                </div>
-                <div class="search-result-price">
-                  ZMW {{ product.price | number:'1.2-2' }}
-                </div>
-              </div>
-            </ion-item>
-          </ion-list>
+      @if (showMenuBar() && !isMobile()) {
+        <div class="menu-strip products-menu-strip">
+          <button
+            *ngFor="let menu of activeMenus()"
+            class="menu-tile"
+            [class.active]="selectedMenuId() === menu._id"
+            [style.background-color]="menu.color || 'var(--ion-color-primary)'"
+            (click)="selectMenu(menu._id)"
+          >
+            <span class="menu-name">{{ menu.name }}</span>
+          </button>
         </div>
       }
-      
-      <!-- Regular Product Grid -->
-      <div class="products-grid" [class.hidden]="isGlobalSearchActive()">
-        <ion-grid>
-          <ion-row>
-            <ion-col
-              *ngFor="let product of filteredProducts()"
-              size="6"
-              sizeMd="4"
-              sizeLg="3"
-            >
-              <div
-                class="product-tile"
-                (click)="addToCart(product)"
-                [style.background-color]="!product.imageUrl ? productTileColor() : 'transparent'"
-                [style.background-image]="product.imageUrl ? 'url(' + product.imageUrl + ')' : 'none'"
-              >
-                <div class="product-content">
-                  <div class="product-name">{{ product.name }}</div>
-                  <div class="product-price">ZMW {{ product.price | number:'1.2-2' }}</div>
-                </div>
-              </div>
-            </ion-col>
-          </ion-row>
-        </ion-grid>
 
-        <!-- Empty state -->
-        <div class="empty-state" *ngIf="filteredProducts().length === 0 && !isLoading()">
-          <ion-icon name="search" color="medium"></ion-icon>
-          <h2>No products found</h2>
-          <p>Try adjusting your search or category filter</p>
+      <!-- Product Grid (shows either category-filtered or global search results) -->
+      <div class="products-panel">
+        <div class="products-grid">
+          <ion-grid>
+            <ion-row>
+              <ion-col
+                *ngFor="let product of visibleProducts()"
+                size="6"
+                sizeMd="4"
+                sizeLg="3"
+              >
+                <div
+                  class="product-tile"
+                  (click)="addToCart(product)"
+                  [style.background-color]="!product.imageUrl ? productTileColor() : 'transparent'"
+                  [style.background-image]="product.imageUrl ? 'url(' + product.imageUrl + ')' : 'none'"
+                >
+                  <div class="product-content">
+                    <div class="product-name">{{ product.name }}</div>
+                    <div class="product-price">ZMW {{ product.price | number:'1.2-2' }}</div>
+                  </div>
+                </div>
+              </ion-col>
+            </ion-row>
+          </ion-grid>
+
+          <!-- Empty state -->
+          <div class="empty-state" *ngIf="visibleProducts().length === 0 && !isLoading()">
+            <ion-icon name="search" color="medium"></ion-icon>
+            <h2>No products found</h2>
+            <p>Try adjusting your search text or filters</p>
+          </div>
+
+          <!-- Loading state -->
+          <div class="loading-state" *ngIf="isLoading()">
+            <ion-spinner name="crescent" color="primary"></ion-spinner>
+            <p>Loading products...</p>
+          </div>
         </div>
 
-        <!-- Loading state -->
-        <div class="loading-state" *ngIf="isLoading()">
-          <ion-spinner name="crescent" color="primary"></ion-spinner>
-          <p>Loading products...</p>
+        <!-- On-screen keypad (desktop only) -->
+        <div class="numpad-container" *ngIf="!isMobile() && showKeypad()">
+          <div class="numpad-header">
+            <div class="numpad-mode-toggle">
+              <button
+                type="button"
+                class="numpad-mode-button"
+                [class.active]="keypadMode() === 'qty'"
+                (click)="setKeypadMode('qty')">
+                Qty
+              </button>
+              <button
+                type="button"
+                class="numpad-mode-button"
+                [class.active]="keypadMode() === 'barcode'"
+                (click)="setKeypadMode('barcode')">
+                Barcode
+              </button>
+            </div>
+
+            <div class="numpad-display">
+              {{ keypadDisplay() || '0' }}
+            </div>
+
+            <div class="numpad-actions">
+              <ion-button size="small" fill="clear" (click)="onKeypadPress('ok')">
+                <ion-icon name="checkmark" slot="icon-only"></ion-icon>
+              </ion-button>
+              <ion-button size="small" fill="clear" (click)="onKeypadPress('clear')">
+                <ion-icon name="close" slot="icon-only"></ion-icon>
+              </ion-button>
+            </div>
+          </div>
+
+          <div class="numpad-grid">
+            <div class="numpad-row">
+              <button type="button" class="numpad-key" (click)="onKeypadPress('1')">1</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('2')">2</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('3')">3</button>
+            </div>
+            <div class="numpad-row">
+              <button type="button" class="numpad-key" (click)="onKeypadPress('4')">4</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('5')">5</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('6')">6</button>
+            </div>
+            <div class="numpad-row">
+              <button type="button" class="numpad-key" (click)="onKeypadPress('7')">7</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('8')">8</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('9')">9</button>
+            </div>
+            <div class="numpad-row">
+              <button
+                type="button"
+                class="numpad-key"
+                [class.disabled]="keypadMode() === 'qty'"
+                (click)="keypadMode() === 'barcode' ? onKeypadPress('.') : null">.</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('0')">0</button>
+              <button type="button" class="numpad-key" (click)="onKeypadPress('backspace')">x</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -528,10 +748,49 @@
   <!-- Mobile Floating Cart Button (hidden when showing cart, checkout, or when cart is empty) -->
   @if (isMobile() && currentView() === 'products' && selectedCategory() && cartItems().length > 0) {
     <ion-fab vertical="bottom" horizontal="end" slot="fixed">
-      <ion-fab-button color="primary" (click)="viewCart()">
+      <ion-fab-button
+        color="primary"
+        (click)="viewCart()"
+        [class.cart-bounce]="cartFabAnimating()"
+      >
         <ion-icon name="cart"></ion-icon>
         <ion-badge color="danger" class="cart-badge">{{ cartSummary().itemCount }}</ion-badge>
       </ion-fab-button>
     </ion-fab>
+  }
+
+  <!-- Held Transactions Modal -->
+  @if (showHeldTransactions()) {
+    <div class="modal-overlay" (click)="showHeldTransactions.set(false)">
+      <div class="held-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Held Tickets</h2>
+          <ion-button fill="clear" (click)="showHeldTransactions.set(false)">
+            <ion-icon name="close" slot="icon-only"></ion-icon>
+          </ion-button>
+        </div>
+
+        <div class="modal-content">
+          @if (heldTransactions().length === 0) {
+            <p class="empty-message">No held tickets</p>
+          } @else {
+            <ion-list>
+              <ion-item button *ngFor="let held of heldTransactions()" (click)="recallTransaction(held)">
+                <ion-label>
+                  <h2>{{ held.items.length }} items</h2>
+                  <p>{{ held.heldAt | date:'short' }}</p>
+                  @if (held.customer) {
+                    <p>{{ held.customer.name }}</p>
+                  }
+                </ion-label>
+                <div slot="end">
+                  <strong>ZMW {{ held.total | number:'1.2-2' }}</strong>
+                </div>
+              </ion-item>
+            </ion-list>
+          }
+        </div>
+      </div>
+    </div>
   }
 </ion-content>

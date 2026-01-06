@@ -36,6 +36,47 @@
   <ion-card>
     <ion-card-header>
       <ion-card-title>
+        <ion-icon name="hardware-chip-outline"></ion-icon>
+        Onboard Printers
+      </ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-list>
+        @for (option of onboardPrinterOptions; track option.id) {
+          <ion-item [disabled]="!option.implemented">
+            <ion-label>
+              <h2>{{ option.name }}</h2>
+              <p class="ion-text-wrap">{{ option.description }}</p>
+              @if (!option.implemented) {
+                <p class="not-implemented">Not implemented yet</p>
+              }
+            </ion-label>
+
+            @if (option.implemented) {
+              @if (defaultPrinter()?.driver === option.driver && defaultPrinter()?.printerType === 'OB') {
+                <ion-badge slot="end" color="success">
+                  <ion-icon name="checkmark"></ion-icon>
+                  Default
+                </ion-badge>
+              } @else {
+                <ion-button
+                  slot="end"
+                  fill="outline"
+                  (click)="useOnboardPrinter(option.id)">
+                  Use
+                </ion-button>
+              }
+            }
+          </ion-item>
+        }
+      </ion-list>
+    </ion-card-content>
+  </ion-card>
+
+  <!-- Bluetooth Printers Section -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>
         <ion-icon name="bluetooth"></ion-icon>
         Bluetooth Printers
       </ion-card-title>
@@ -103,8 +144,61 @@
     </ion-card-content>
   </ion-card>
 
+  <!-- Network Printers Section -->
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>
+        <ion-icon name="print"></ion-icon>
+        Network Printers
+      </ion-card-title>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-button
+        expand="block"
+        (click)="addNetworkPrinter()">
+        <ion-icon name="add" slot="start"></ion-icon>
+        Add Network Printer
+      </ion-button>
+
+      @if (hasNetworkPrinters()) {
+        <ion-list class="ion-margin-top">
+          @for (printer of networkPrinters(); track printer.deviceId) {
+            <ion-item>
+              <ion-label>
+                <h2>{{ printer.name }}</h2>
+                <p>Address: {{ printer.address }}</p>
+              </ion-label>
+
+              @if (defaultPrinter()?.deviceId === printer.deviceId) {
+                <ion-badge slot="end" color="success">
+                  <ion-icon name="checkmark"></ion-icon>
+                  Default
+                </ion-badge>
+              }
+
+              <ion-button
+                slot="end"
+                fill="outline"
+                (click)="connectToPrinter(printer)">
+                Use
+              </ion-button>
+            </ion-item>
+          }
+        </ion-list>
+      } @else {
+        <div class="empty-state ion-padding">
+          <ion-icon name="print" size="large" color="medium"></ion-icon>
+          <p>No network printers configured</p>
+          <p class="ion-text-wrap">
+            Tap "Add Network Printer" to add a printer by IP address.
+          </p>
+        </div>
+      }
+    </ion-card-content>
+  </ion-card>
+
   <!-- Connection Status -->
-  @if (isConnected() && defaultPrinter()) {
+  @if (defaultPrinter() && (isConnected() || isOnboardDefault())) {
     <ion-card color="success">
       <ion-card-content>
         <div class="connection-status">
@@ -119,7 +213,7 @@
   }
 
   <!-- Test Print -->
-  @if (isConnected()) {
+  @if (isConnected() || isOnboardDefault()) {
     <ion-card>
       <ion-card-header>
         <ion-card-title>
@@ -264,7 +358,7 @@
   </ion-card>
 
   <!-- Permissions Warning -->
-  @if (!isConnected() && availablePrinters().length === 0) {
+  @if (!isConnected() && availablePrinters().length === 0 && !isOnboardDefault()) {
     <ion-card color="warning">
       <ion-card-content>
         <div class="warning-content">

@@ -1,0 +1,68 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-buttons slot="start">
+      <ion-menu-button></ion-menu-button>
+    </ion-buttons>
+    <ion-title>Menus</ion-title>
+    <ion-buttons slot="end">
+      <ion-button fill="clear" color="light" (click)="openCreateMenuDialog()">
+        <ion-icon slot="start" name="add-outline"></ion-icon>
+        <ion-label>New Menu</ion-label>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div class="menus-container">
+    @if (loading()) {
+      <div class="loading-container">
+        <ion-spinner name="crescent" color="primary"></ion-spinner>
+      </div>
+    } @else {
+      @if (menus().length === 0) {
+        <div class="empty-state">
+          <ion-icon name="restaurant-outline"></ion-icon>
+          <h2>No menus yet</h2>
+          <p>Create menus like Kitchen or Bar to organize categories.</p>
+          <ion-button color="primary" (click)="openCreateMenuDialog()">
+            <ion-icon slot="start" name="add-outline"></ion-icon>
+            <ion-label>Create Menu</ion-label>
+          </ion-button>
+        </div>
+      } @else {
+        <div class="menus-grid">
+          @for (menu of menus(); track menu._id) {
+            <ion-card class="menu-card">
+              <ion-card-header>
+                <ion-card-title>
+                  <span class="color-dot" [style.background-color]="menu.color || 'var(--ion-color-primary)'"></span>
+                  {{ menu.name }}
+                  <ion-badge [color]="menu.active ? 'success' : 'medium'">
+                    {{ menu.active ? 'Active' : 'Inactive' }}
+                  </ion-badge>
+                </ion-card-title>
+              </ion-card-header>
+              <ion-card-content>
+                <p *ngIf="menu.description">{{ menu.description }}</p>
+                <div class="menu-actions">
+                  <ion-button size="small" fill="outline" (click)="openEditMenuDialog(menu)">
+                    <ion-icon slot="start" name="create-outline"></ion-icon>
+                    <ion-label>Edit</ion-label>
+                  </ion-button>
+                  <ion-button size="small" fill="outline" (click)="toggleActive(menu)">
+                    <ion-icon slot="start" name="color-palette-outline"></ion-icon>
+                    <ion-label>{{ menu.active ? 'Deactivate' : 'Activate' }}</ion-label>
+                  </ion-button>
+                  <ion-button size="small" fill="clear" color="danger" (click)="deleteMenu(menu)">
+                    <ion-icon slot="icon-only" name="trash-outline"></ion-icon>
+                  </ion-button>
+                </div>
+              </ion-card-content>
+            </ion-card>
+          }
+        </div>
+      }
+    }
+  </div>
+</ion-content>

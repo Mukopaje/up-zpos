@@ -35,6 +35,14 @@
   </ion-toolbar>
 </ion-header>
 
+<input
+  #fileInput
+  type="file"
+  accept=".csv,text/csv"
+  hidden
+  (change)="onFileSelected($event)"
+/>
+
 <ion-content>
   <ion-refresher slot="fixed" (ionRefresh)="handleRefresh($event)">
     <ion-refresher-content></ion-refresher-content>
@@ -50,10 +58,14 @@
   <div *ngIf="!isLoading() && filteredProducts().length === 0" class="empty-state">
     <ion-icon name="search-outline" size="large"></ion-icon>
     <h3>No products found</h3>
-    <p>{{ searchQuery() ? 'Try a different search term' : 'Add your first product to get started' }}</p>
+    <p>{{ searchQuery() ? 'Try a different search term' : 'Add your first product or import from CSV to get started' }}</p>
     <ion-button (click)="openAddProductModal()">
       <ion-icon name="add" slot="start"></ion-icon>
       Add Product
+    </ion-button>
+    <ion-button fill="outline" (click)="importFromCSV()">
+      <ion-icon name="cloud-upload-outline" slot="start"></ion-icon>
+      Import from CSV
     </ion-button>
   </div>
 
@@ -151,7 +163,7 @@
       <ion-fab-button color="secondary" (click)="openAddProductModal()">
         <ion-icon name="add"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button color="primary" (click)="scanBarcode()">
+      <ion-fab-button color="tertiary" (click)="scanBarcode()">
         <ion-icon name="barcode-outline"></ion-icon>
       </ion-fab-button>
     </ion-fab-list>

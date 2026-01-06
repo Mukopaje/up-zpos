@@ -65,7 +65,10 @@ export class CustomerSelectModalComponent implements OnInit {
   private toastCtrl = inject(ToastController);
 
   // Props passed from parent
+  // totalAmount: the amount that needs to be covered when using credit
+  // enforceCreditLimit: when true, block selection if available credit is insufficient
   totalAmount = 0;
+  enforceCreditLimit = true;
 
   // State
   searchQuery = signal('');
@@ -108,12 +111,14 @@ export class CustomerSelectModalComponent implements OnInit {
   }
 
   selectCustomer(customer: Customer) {
-    // Check if customer has enough credit
-    const availableCredit = this.customersService.getAvailableCredit(customer._id);
-    
-    if (this.totalAmount > availableCredit) {
-      this.showToast(`Insufficient credit. Available: ${availableCredit.toFixed(2)}, Required: ${this.totalAmount.toFixed(2)}`);
-      return;
+    // When enforcing credit, block selection if available credit is not enough
+    if (this.enforceCreditLimit && this.totalAmount > 0) {
+      const availableCredit = this.customersService.getAvailableCredit(customer._id);
+
+      if (this.totalAmount > availableCredit) {
+        this.showToast(`Insufficient credit. Available: ${availableCredit.toFixed(2)}, Required: ${this.totalAmount.toFixed(2)}`);
+        return;
+      }
     }
 
     this.modalCtrl.dismiss(customer, 'selected');

@@ -1,24 +1,38 @@
 <ion-header>
-  <ion-toolbar>
+  <ion-toolbar color="primary">
     <ion-title>Tables</ion-title>
+    <ion-buttons slot="start" *ngIf="isAdmin()">
+      <ion-button color="light" (click)="exitToMainPos()">
+        <ion-icon name="swap-horizontal-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+    </ion-buttons>
     <ion-buttons slot="end">
-      <ion-chip>
+      <ion-chip color="light">
         <ion-icon name="restaurant-outline"></ion-icon>
         <ion-label>{{ occupiedCount() }}/{{ tables().length }}</ion-label>
       </ion-chip>
-      <ion-chip color="success">
+      <ion-chip color="light">
         <ion-icon name="cash-outline"></ion-icon>
         <ion-label>{{ totalRevenue() | currency:'ZMW':'symbol':'1.0-0' }}</ion-label>
       </ion-chip>
-      <ion-button (click)="viewMode.set(viewMode() === 'grid' ? 'list' : 'grid')">
+      <ion-button color="light" (click)="viewMode.set(viewMode() === 'grid' ? 'list' : 'grid')">
         <ion-icon [name]="viewMode() === 'grid' ? 'list-outline' : 'grid-outline'" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button color="light" (click)="viewMode.set('grid'); layoutMode.set(layoutMode() === 'service' ? 'layout' : 'service')">
+        <ion-icon name="map-outline" slot="icon-only"></ion-icon>
+      </ion-button>
+      <ion-button
+        *ngIf="isAdmin() && layoutMode() === 'layout'"
+        color="light"
+        (click)="toggleLayoutEditing()">
+        <ion-icon [name]="editingLayout() ? 'checkmark-outline' : 'create-outline'" slot="icon-only"></ion-icon>
       </ion-button>
     </ion-buttons>
   </ion-toolbar>
   
   <!-- Section Filter -->
-  <ion-toolbar>
-    <ion-segment [(ngModel)]="selectedSection" scrollable>
+  <ion-toolbar color="light">
+    <ion-segment [(ngModel)]="selectedSection" scrollable color="primary">
       @for (section of sections(); track section) {
         <ion-segment-button [value]="section">
           <ion-label>{{ section === 'all' ? 'All' : section }}</ion-label>
@@ -29,13 +43,136 @@
 </ion-header>
 
 <ion-content>
-  <!-- Grid View -->
-  @if (viewMode() === 'grid') {
-    <ion-grid class="tables-grid">
-      <ion-row>
+  @if (hospitalityContext.movingFromTableId()) {
+    <ion-item color="warning" lines="full" class="change-table-banner">
+      <ion-label>
+        Changing table: tap the new table to move this order.
+      </ion-label>
+    </ion-item>
+  }
+  <!-- Layout View (floor plan) -->
+  @if (layoutMode() === 'layout') {
+    <div class="floor-plan">
+      <div
+        class="floor-plan-canvas"
+        #floorPlanCanvas
+        [ngStyle]="{
+          'background-image': floorPlanImageUrl() ? 'url(' + floorPlanImageUrl() + ')' : 'none'
+        }"
+      >
+        @for (label of floorLabels(); track label.id) {
+          <div
+            class="floor-label floor-label-{{ label.type }}"
+            [ngStyle]="{ top: (label.y * 100) + '%', left: (label.x * 100) + '%' }"
+            (mousedown)="startDragLabel($event, label)"
+            (touchstart)="startDragLabel($event, label)"
+          >
+            <span>{{ label.text || label.type }}</span>
+            @if (editingLayout()) {
+              <button
+                type="button"
+                class="remove-label-button"
+                (click)="removeLabel(label.id); $event.stopPropagation()">
+                ×
+              </button>
+            }
+          </div>
+        }
+
         @for (table of filteredTables(); track table._id) {
-          <ion-col size="6" sizeMd="4" sizeLg="3">
-            <ion-card 
+          <button
+            type="button"
+            class="floor-table status-{{ table.status }}"
+            [ngStyle]="getLayoutStyle(table)"
+            (click)="onTableClick(table)"
+            (mousedown)="startDragTable($event, table)"
+            (touchstart)="startDragTable($event, table)"
+          >
+            <div class="floor-table-number">{{ table.number }}</div>
+            @if (table.name) {
+              <div class="floor-table-name">{{ table.name }}</div>
+            }
+          </button>
+        }
+      </div>
+
+      @if (isAdmin() && editingLayout()) {
+        <div class="layout-edit-panel ion-padding">
+          <ion-item lines="none">
+            <ion-label position="stacked">Add floor label</ion-label>
+            <ion-select [(ngModel)]="labelType" interface="popover">
+              <ion-select-option value="door">Door</ion-select-option>
+              <ion-select-option value="counter">Counter</ion-select-option>
+              <ion-select-option value="bar">Bar</ion-select-option>
+              <ion-select-option value="restroom">Restroom</ion-select-option>
+              <ion-select-option value="custom">Custom</ion-select-option>
+            </ion-select>
+            <ion-input
+              class="layout-label-text"
+              placeholder="Label text (optional)"
+              [(ngModel)]="labelText">
+            </ion-input>
+            <ion-button size="small" color="primary" (click)="addLabel()">
+              <ion-icon slot="start" name="add-outline"></ion-icon>
+              Add
+            </ion-button>
+          </ion-item>
+          <ion-item lines="none" class="layout-image-row">
+            <ion-label position="stacked">Floor plan image</ion-label>
+            <div class="layout-image-controls">
+              <div class="layout-image-preview" *ngIf="floorPlanImageUrl()">
+                <img [src]="floorPlanImageUrl()" alt="Floor plan preview" />
+              </div>
+              <div class="layout-image-buttons">
+                <input
+                  #floorImageInput
+                  type="file"
+                  accept="image/*"
+                  (change)="onFloorImageFileSelected($event)"
+                  hidden
+                />
+                <ion-button size="small" color="primary" (click)="triggerFloorImagePicker(floorImageInput)">
+                  <ion-icon slot="start" name="image-outline"></ion-icon>
+                  Choose Image
+                </ion-button>
+                <ion-button size="small" color="medium" fill="outline" (click)="clearFloorImage()" [disabled]="!floorPlanImageUrl()">
+                  Clear
+                </ion-button>
+              </div>
+            </div>
+          </ion-item>
+          <ion-text color="medium">
+            <p>Drag tables and labels to reposition them, then tap the pen icon to finish editing.</p>
+          </ion-text>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Grid View -->
+  @if (layoutMode() === 'service' && viewMode() === 'grid') {
+    @if (filteredTables().length === 0) {
+      <div class="hospitality-empty">
+        <ion-icon name="restaurant-outline"></ion-icon>
+        <h2>No tables configured</h2>
+        <p>Use Tables Management to create tables for this terminal.</p>
+        @if (isAdmin()) {
+          <ion-button color="primary" (click)="goToTablesManagement()">
+            <ion-icon slot="start" name="create-outline"></ion-icon>
+            Manage Tables
+          </ion-button>
+        } @else {
+          <ion-text color="medium">
+            <p>Ask your administrator to configure tables.</p>
+          </ion-text>
+        }
+      </div>
+    } @else {
+      <ion-grid class="tables-grid">
+        <ion-row>
+          @for (table of filteredTables(); track table._id) {
+            <ion-col size="6" sizeMd="4" sizeLg="3">
+              <ion-card 
               [class]="'table-card status-' + table.status"
               (click)="selectTable(table)"
               button
@@ -89,10 +226,11 @@
         }
       </ion-row>
     </ion-grid>
+    }
   }
   
   <!-- List View -->
-  @if (viewMode() === 'list') {
+  @if (layoutMode() === 'service' && viewMode() === 'list') {
     <ion-list>
       @for (table of filteredTables(); track table._id) {
         <ion-item button (click)="selectTable(table)">
@@ -117,13 +255,13 @@
 </ion-content>
 
 <!-- Occupy Table Modal -->
-<ion-modal [isOpen]="showTableModal()" (didDismiss)="closeModals()">
+<ion-modal #occupyTableModal [isOpen]="showTableModal()" (didDismiss)="closeOccupyTableModal()" cssClass="occupy-table-modal">
   <ng-template>
     <ion-header>
-      <ion-toolbar>
+      <ion-toolbar color="primary">
         <ion-title>Open Table {{ selectedTable()?.number }}</ion-title>
         <ion-buttons slot="end">
-          <ion-button (click)="closeModals()">
+          <ion-button (click)="closeOccupyTableModal()">
             <ion-icon name="close-outline" slot="icon-only"></ion-icon>
           </ion-button>
         </ion-buttons>
@@ -132,8 +270,8 @@
     
     <ion-content class="ion-padding">
       <ion-item>
-        <ion-label position="stacked">Guest Name *</ion-label>
-        <ion-input [(ngModel)]="guestName" placeholder="Enter guest name"></ion-input>
+        <ion-label position="stacked">Guest Name (optional)</ion-label>
+        <ion-input [(ngModel)]="guestName" placeholder="Enter guest name (optional)"></ion-input>
       </ion-item>
       
       <ion-item>
@@ -141,21 +279,33 @@
         <ion-input type="number" [(ngModel)]="guestCount" min="1"></ion-input>
       </ion-item>
       
-      <ion-item>
-        <ion-label position="stacked">Assign Waiter</ion-label>
-        <ion-select [(ngModel)]="selectedWaiterId" placeholder="Select waiter">
-          @for (waiter of waiters(); track waiter._id) {
-            <ion-select-option [value]="waiter._id">{{ waiter.name }}</ion-select-option>
-          }
-        </ion-select>
-      </ion-item>
+      @if (!loggedInWaiter) {
+        <ion-item>
+          <ion-label position="stacked">Assign Waiter</ion-label>
+          <ion-select [(ngModel)]="selectedWaiterId" placeholder="Select waiter">
+            @for (waiter of waiters(); track waiter._id) {
+              <ion-select-option [value]="waiter._id">{{ waiter.name }}</ion-select-option>
+            }
+          </ion-select>
+        </ion-item>
+      } @else {
+        <ion-item>
+          <ion-label position="stacked">Waiter</ion-label>
+          <ion-label>{{ loggedInWaiter.name }}</ion-label>
+        </ion-item>
+      }
       
       <ion-item>
         <ion-label position="stacked">Notes</ion-label>
         <ion-textarea [(ngModel)]="tableNotes" placeholder="Any special requests..."></ion-textarea>
       </ion-item>
       
-      <ion-button expand="block" class="ion-margin-top" (click)="occupyTable()" [disabled]="!guestName() || guestCount() < 1">
+      <ion-button
+        expand="block"
+        color="success"
+        class="ion-margin-top"
+        (click)="occupyTable()"
+        [disabled]="guestCount() < 1">
         <ion-icon name="checkmark-outline" slot="start"></ion-icon>
         Open Table
       </ion-button>
@@ -257,73 +407,20 @@
     </ion-content>
     
     <ion-footer>
-      <div class="order-actions">
-        <ion-button expand="block" color="primary" (click)="sendToKitchen()" [disabled]="orderItems().length === 0">
-          <ion-icon name="send-outline" slot="start"></ion-icon>
-          Send to Kitchen
-        </ion-button>
-        <ion-button expand="block" fill="outline" (click)="saveOrder()" [disabled]="orderItems().length === 0">
-          Save Order
-        </ion-button>
-      </div>
-    </ion-footer>
-  </ng-template>
-</ion-modal>
-
-<!-- Checkout Modal -->
-<ion-modal [isOpen]="showCheckoutModal()" (didDismiss)="closeModals()">
-  <ng-template>
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>Checkout - Table {{ selectedTable()?.number }}</ion-title>
-        <ion-buttons slot="end">
-          <ion-button (click)="closeModals()">
-            <ion-icon name="close-outline" slot="icon-only"></ion-icon>
+        <div class="order-actions">
+          <ion-button expand="block" color="primary" (click)="sendToKitchen()" [disabled]="orderItems().length === 0">
+            <ion-icon name="send-outline" slot="start"></ion-icon>
+            Close &amp; Send
           </ion-button>
-        </ion-buttons>
-      </ion-toolbar>
-    </ion-header>
-    
-    <ion-content class="ion-padding">
-      <div class="checkout-summary">
-        <div class="guest-info">
-          <h3>{{ selectedTable()?.guestName }}</h3>
-          <p>{{ selectedTable()?.guestCount }} guests • {{ selectedTable()?.waiterName }}</p>
+          <ion-button expand="block" fill="outline" (click)="saveOrder()" [disabled]="orderItems().length === 0">
+            Save Order
+          </ion-button>
+          <ion-button expand="block" color="success" (click)="openCheckout(selectedTable()!)" [disabled]="!selectedTable() || selectedTable()?.amount === 0">
+            <ion-icon name="cash-outline" slot="start"></ion-icon>
+            Checkout
+          </ion-button>
         </div>
-        
-        <div class="amount-due">
-          <span>Amount Due</span>
-          <div class="amount">{{ selectedTable()?.amount | currency:'ZMW':'symbol':'1.2-2' }}</div>
-        </div>
-        
-        <ion-item>
-          <ion-label position="stacked">Payment Method</ion-label>
-          <ion-select [(ngModel)]="paymentMethod">
-            <ion-select-option value="cash">Cash</ion-select-option>
-            <ion-select-option value="card">Card</ion-select-option>
-            <ion-select-option value="mobile">Mobile Money</ion-select-option>
-            <ion-select-option value="account">Account</ion-select-option>
-          </ion-select>
-        </ion-item>
-        
-        <ion-item>
-          <ion-label position="stacked">Amount Paid</ion-label>
-          <ion-input type="number" [(ngModel)]="amountPaid"></ion-input>
-        </ion-item>
-        
-        @if (amountPaid() > (selectedTable()?.amount || 0)) {
-          <div class="change-display">
-            <span>Change:</span>
-            <span class="change">{{ amountPaid() - (selectedTable()?.amount || 0) | currency:'ZMW':'symbol':'1.2-2' }}</span>
-          </div>
-        }
-      </div>
-      
-      <ion-button expand="block" color="success" class="ion-margin-top" (click)="completePayment()" [disabled]="amountPaid() < (selectedTable()?.amount || 0)">
-        <ion-icon name="checkmark-outline" slot="start"></ion-icon>
-        Complete Payment
-      </ion-button>
-    </ion-content>
+    </ion-footer>
   </ng-template>
 </ion-modal>
 

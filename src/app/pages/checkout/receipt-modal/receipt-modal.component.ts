@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   IonHeader,
   IonToolbar,
@@ -9,6 +10,9 @@ import {
   IonButton,
   IonIcon,
   IonText,
+  IonItem,
+  IonLabel,
+  IonInput,
   ModalController,
   ToastController
 } from '@ionic/angular/standalone';
@@ -22,6 +26,7 @@ import { close, print, logoWhatsapp, mail } from 'ionicons/icons';
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
     IonHeader,
     IonToolbar,
     IonTitle,
@@ -29,7 +34,10 @@ import { close, print, logoWhatsapp, mail } from 'ionicons/icons';
     IonButtons,
     IonButton,
     IonIcon,
-    IonText
+    IonText,
+    IonItem,
+    IonLabel,
+    IonInput
   ]
 })
 export class ReceiptModalComponent implements OnInit {
@@ -41,13 +49,23 @@ export class ReceiptModalComponent implements OnInit {
   @Input() businessName: string = 'ZPOS';
   @Input() onPrint?: () => void;
   @Input() onWhatsApp?: () => void;
-  @Input() onEmail?: () => void;
+  @Input() onEmail?: (email?: string) => void;
+
+  // Optional initial email address to pre-fill when the modal
+  // opens (e.g. from the selected customer in checkout).
+  @Input() initialEmail: string | null = null;
+
+  emailAddress: string = '';
 
   constructor() {
     addIcons({ close, print, logoWhatsapp, mail });
   }
 
-  ngOnInit() {}
+  ngOnInit() {
+    if (this.initialEmail) {
+      this.emailAddress = this.initialEmail;
+    }
+  }
 
   dismiss() {
     this.modalCtrl.dismiss();
@@ -65,10 +83,23 @@ export class ReceiptModalComponent implements OnInit {
     }
   }
 
-  handleEmail() {
-    if (this.onEmail) {
-      this.onEmail();
+  async handleEmail() {
+    if (!this.onEmail) {
+      return;
     }
+
+    const email = this.emailAddress.trim();
+    if (!email) {
+      const toast = await this.toastCtrl.create({
+        message: 'Enter an email address first',
+        duration: 2000,
+        position: 'bottom'
+      });
+      await toast.present();
+      return;
+    }
+
+    this.onEmail(email);
   }
 
   formatDate(timestamp: number): string {

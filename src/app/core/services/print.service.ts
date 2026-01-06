@@ -3,8 +3,11 @@ import { Platform } from '@ionic/angular/standalone';
 import { BleClient, BleDevice, numberToUUID } from '@capacitor-community/bluetooth-le';
 import { StorageService } from './storage.service';
 import { SettingsService } from './settings.service';
-import { Printer, PrinterSettings, ReceiptData } from '../../models';
+import { Printer, PrinterSettings, ReceiptData, CartItem, Table, KitchenOrder } from '../../models';
 import { ESC_POS_COMMANDS, PrinterCommands } from './printer-commands';
+import { NetworkPrinter } from '../plugins/network-printer.plugin';
+import { Q1Printer } from '../plugins/q1-printer.plugin';
+import { L156Printer } from '../plugins/l156-printer.plugin';
 
 @Injectable({
   providedIn: 'root'
@@ -56,6 +59,59 @@ export class PrintService {
   constructor() {
     this.loadPrinterSettings();
     this.initializeBluetooth();
+  }
+
+  /**
+   * Simple kitchen ticket printing for hospitality mode.
+   * Groups items by mapped kitchen printer (category-based mapping for now)
+   * and prints a lightweight kitchen order per printer.
+   */
+  async printKitchenTickets(context: {
+    table: Pick<Table, 'number' | 'guestName' | 'guestCount' | 'waiterName'>;
+    items: CartItem[];
+  }, targetPrinter?: Printer | string): Promise<void> {
+    const printer = this.resolveTargetPrinter(targetPrinter);
+    if (!printer || !printer.printing) {
+      console.warn('No printer configured for kitchen tickets');
+      return;
+    }
+
+    const now = new Date();
+    const headerLines: string[] = [];
+    headerLines.push('*** KITCHEN ORDER ***');
+    headerLines.push(`Table: ${context.table.number}`);
+    if (context.table.guestName) {
+      headerLines.push(`Guest: ${context.table.guestName}`);
+    }
+    if (context.table.guestCount) {
+      headerLines.push(`Guests: ${context.table.guestCount}`);
+    }
+    if (context.table.waiterName) {
+      headerLines.push(`Waiter: ${context.table.waiterName}`);
+    }
+    headerLines.push(now.toLocaleString());
+    headerLines.push('');
+
+    const itemLines = context.items.map(item => {
+      const qty = item.quantity || item.Quantity || 1;
+      const name = item.name || item.product?.name || '';
+      return `${qty} x ${name}`;
+    });
+
+    const footerLines = ['','--------------------------','END OF ORDER'];
+    const raw = [...headerLines, ...itemLines, ...footerLines].join('\n');
+
+    try {
+      this.isPrinting.set(true);
+      await Promise.race([
+        this.sendToPrinter(raw, printer),
+        this.timeoutPromise(this.PRINT_TIMEOUT, 'Kitchen print timeout')
+      ]);
+    } catch (error) {
+      console.error('Kitchen print error:', error);
+    } finally {
+      this.isPrinting.set(false);
+    }
   }
 
   /**
@@ -660,7 +716,8 @@ export class PrintService {
       throw new Error(errorMsg);
     }
 
-    if (!this.isConnected()) {
+    // Onboard printers (e.g. L156) don't require a Bluetooth connection
+    if (!this.isConnected() && printer.printerType !== 'OB' && printer.driver !== 'l156') {
       const errorMsg = 'Printer not connected. Please connect to the printer first.';
       this.lastError.set(errorMsg);
       console.warn(errorMsg);
@@ -813,33 +870,86 @@ export class PrintService {
   /**
    * Send data to physical printer
    */
-  private async sendToPrinter(data: string): Promise<void> {
-    const printer = this.defaultPrinter();
+  private async sendToPrinter(data: string, targetPrinter?: Printer): Promise<void> {
+    const printer = targetPrinter || this.defaultPrinter();
     
     if (!printer) {
       throw new Error('No printer configured');
     }
 
     // Only print on real device
-    const isDevice = await this.platform.ready();
-    if (isDevice !== 'cordova') {
+    await this.platform.ready();
+    const isNative = this.platform.is('cordova') || this.platform.is('capacitor');
+    if (!isNative) {
       console.log('Print preview (browser mode):', data);
       return;
     }
 
-    // TODO: Implement actual printer communication based on printer type
+    // Decide based on driver first (SDK/native integrations), then fallback
+    // to generic transport by printerType.
+    if (printer.driver === 'ocom-q1') {
+      await this.printViaQ1(data);
+      return;
+    }
+
+    if (printer.driver === 'l156') {
+      await this.printViaL156(data);
+      return;
+    }
+
     switch (printer.printerType) {
       case 'BT':
         await this.printViaBluetooth(data);
         break;
       case 'Network':
-        await this.printViaNetwork(data);
+        await this.printViaNetwork(data, printer);
         break;
       case 'USB':
         await this.printViaUSB(data);
         break;
       default:
         console.warn('Unsupported printer type:', printer.printerType);
+    }
+  }
+
+  private async printViaQ1(data: string): Promise<void> {
+    await this.platform.ready();
+    const isNative = this.platform.is('cordova') || this.platform.is('capacitor');
+    if (!isNative) {
+      console.warn('Q1 printing is only available on device');
+      return;
+    }
+
+    // The underlying Cordova plugin expects base64 or raw strings depending
+    // on the method; for now we send the raw string and let the native side
+    // handle encoding, keeping this wrapper minimal.
+    try {
+      await Q1Printer.printerInit();
+    } catch (err) {
+      console.warn('Q1 printerInit failed or not required', err);
+    }
+
+    try {
+      await Q1Printer.sendRAWData({ data });
+    } catch (err) {
+      console.error('Q1 print failed', err);
+      throw err;
+    }
+  }
+
+  private async printViaL156(data: string): Promise<void> {
+    await this.platform.ready();
+    const isNative = this.platform.is('cordova') || this.platform.is('capacitor');
+    if (!isNative) {
+      console.warn('L156 printing is only available on device');
+      return;
+    }
+
+    try {
+      await L156Printer.printRaw({ data });
+    } catch (err) {
+      console.error('L156 print failed', err);
+      throw err;
     }
   }
 
@@ -936,11 +1046,58 @@ export class PrintService {
   /**
    * Print via Network (WiFi/Ethernet)
    */
-  private async printViaNetwork(data: string): Promise<void> {
-    // TODO: Implement network printing
-    console.log('Network printing not yet implemented');
-    console.log('Data to print:', data);
-    throw new Error('Network printing is not yet supported');
+  private async printViaNetwork(data: string, printer: Printer): Promise<void> {
+    await this.platform.ready();
+    const isNative = this.platform.is('cordova') || this.platform.is('capacitor');
+    if (!isNative) {
+      console.warn('Network printing is only available on device');
+      return;
+    }
+
+    const rawAddress = printer.address || printer.macAddress || printer.deviceId;
+    if (!rawAddress) {
+      console.error('No network address configured for printer');
+      throw new Error('No network address configured for printer');
+    }
+
+    let host = rawAddress;
+    let port = 9100;
+
+    if (rawAddress.includes(':')) {
+      const [h, p] = rawAddress.split(':');
+      host = h;
+      const parsed = parseInt(p, 10);
+      if (!Number.isNaN(parsed)) {
+        port = parsed;
+      }
+    }
+
+    try {
+      await NetworkPrinter.print({ host, port, data });
+    } catch (err) {
+      console.error('Network print failed', err);
+      throw err;
+    }
+  }
+
+  private resolveTargetPrinter(target?: Printer | string): Printer | null {
+    if (!target) {
+      return this.defaultPrinter();
+    }
+
+    if (typeof target !== 'string') {
+      return target;
+    }
+
+    const printers = this.printers();
+    const found = printers.find(p =>
+      p.deviceId === target ||
+      p.address === target ||
+      p.macAddress === target ||
+      (p as any)._id === target
+    );
+
+    return found || this.defaultPrinter();
   }
 
   /**

@@ -54,9 +54,15 @@ export class LicenseLoginPage implements OnInit {
   private loadingCtrl = inject(LoadingController);
   private toastCtrl = inject(ToastController);
 
-  email = '';
-  password = '';
+  // License activation credentials
+  licenseCode = '';
+  pin = '';
   isLoading = signal(false);
+
+  // License recovery state (forgot license code)
+  showRecovery = false;
+  recoverEmail = '';
+  recoverPin = '';
 
   async ngOnInit() {
     // Wait for auth service to initialize
@@ -70,9 +76,13 @@ export class LicenseLoginPage implements OnInit {
     }
   }
 
+  toggleRecovery() {
+    this.showRecovery = !this.showRecovery;
+  }
+
   async onLogin() {
-    if (!this.email || !this.password) {
-      this.showToast('Please enter email and password');
+    if (!this.licenseCode || !this.pin) {
+      this.showToast('Please enter license code and PIN');
       return;
     }
 
@@ -82,7 +92,7 @@ export class LicenseLoginPage implements OnInit {
     await loading.present();
 
     try {
-      const success = await this.authService.activateLicense(this.email, this.password);
+      const success = await this.authService.activateLicense(this.licenseCode, this.pin);
       
       if (success) {
         await loading.dismiss();
@@ -90,12 +100,46 @@ export class LicenseLoginPage implements OnInit {
         this.router.navigate(['/pin-login'], { replaceUrl: true });
       } else {
         await loading.dismiss();
-        this.showToast('Invalid credentials or license expired');
+        this.showToast('Invalid license code or PIN, or license expired');
       }
     } catch (error) {
       await loading.dismiss();
       this.showToast('License activation failed. Please check your internet connection.');
       console.error('License activation error:', error);
+    }
+  }
+
+  async onRecoverLicense() {
+    if (!this.recoverEmail) {
+      this.showToast('Please enter the owner email');
+      return;
+    }
+
+    if (!this.recoverPin || this.recoverPin.length < 4) {
+      this.showToast('Please enter the owner PIN (4-6 digits)');
+      return;
+    }
+
+    const loading = await this.loadingCtrl.create({
+      message: 'Sending license details...'
+    });
+    await loading.present();
+
+    try {
+      const result = await this.authService.recoverLicenseKey(this.recoverEmail, this.recoverPin);
+      await loading.dismiss();
+      this.showToast(result.message, result.success ? 'success' : 'danger');
+
+      if (result.success) {
+        // Reset recovery state
+        this.showRecovery = false;
+        this.recoverEmail = '';
+        this.recoverPin = '';
+      }
+    } catch (error) {
+      await loading.dismiss();
+      this.showToast('Unable to process license recovery. Please try again.');
+      console.error('License recovery error:', error);
     }
   }
 

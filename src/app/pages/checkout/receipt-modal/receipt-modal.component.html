@@ -87,6 +87,22 @@
       </div>
     }
 
+    <!-- Email capture for receipt & promotions -->
+    <div class="divider"></div>
+    <div class="email-section">
+      <ion-item lines="full">
+        <ion-label position="stacked">Email receipt to</ion-label>
+        <ion-input
+          type="email"
+          placeholder="customer@example.com"
+          [(ngModel)]="emailAddress">
+        </ion-input>
+      </ion-item>
+      <p class="email-hint">
+        We'll save this email for future receipts and promotions.
+      </p>
+    </div>
+
     <!-- Footer -->
     <div class="receipt-footer">
       <p>Thank you for your business!</p>
