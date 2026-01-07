@@ -166,6 +166,19 @@ export class SyncService {
             totalPulled++;
           }
 
+          // Update categories
+          for (const category of response.categories || []) {
+            const existing = await this.sqliteService.getCategoryById(category.id!);
+            
+            if (!existing) {
+              await this.sqliteService.addCategory(category);
+            } else if ((category.version || 0) > (existing.version || 0)) {
+              // Only update if cloud version is newer
+              await this.sqliteService.updateCategory(category.id!, category);
+            }
+            totalPulled++;
+          }
+
           // Update customers
           for (const customer of response.customers || []) {
             // Similar logic for customers
