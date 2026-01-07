@@ -178,6 +178,11 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   },
   {
+    path: 'categories',
+    loadComponent: () => import('./pages/categories/categories.page').then(m => m.CategoriesPage),
+    canActivate: [AuthGuard]
+  },
+  {
     path: '**',
     redirectTo: 'data-loader'
   }

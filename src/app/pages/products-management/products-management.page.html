@@ -69,52 +69,44 @@
     </ion-button>
   </div>
 
-  <!-- Grid View -->
-  <ion-grid *ngIf="!isLoading() && viewMode() === 'grid' && filteredProducts().length > 0">
+  <!-- Grid View - Compact Cards without Images -->
+  <ion-grid *ngIf="!isLoading() && viewMode() === 'grid' && filteredProducts().length > 0" class="products-grid">
     <ion-row>
       <ion-col size="12" size-md="6" size-lg="4" size-xl="3" *ngFor="let product of filteredProducts()">
-        <ion-card class="product-card">
-          <img
-            [src]="product.imageUrl || 'https://via.placeholder.com/300?text=' + product.name"
-            [alt]="product.name"
-            class="product-image"
-            (error)="handleImageError($event)"
-          />
-          <ion-card-header>
-            <ion-card-title>{{ product.name }}</ion-card-title>
-            <div class="product-meta">
-              <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
-            </div>
-          </ion-card-header>
+        <ion-card class="product-card-compact" button (click)="openEditProductModal(product)">
           <ion-card-content>
-            <div class="product-info">
-              <div class="info-row">
-                <span class="label">Price:</span>
-                <span class="value price">K{{ product.price.toFixed(2) }}</span>
+            <div class="card-header">
+              <h3 class="product-name">{{ product.name }}</h3>
+              <ion-badge *ngIf="product.category" color="primary" class="category-badge">{{ product.category }}</ion-badge>
+            </div>
+            
+            <div class="product-grid-details">
+              <div class="detail-item">
+                <span class="detail-label">Price</span>
+                <span class="detail-value price-highlight">K{{ product.price.toFixed(2) }}</span>
               </div>
-              <div class="info-row" *ngIf="product.cost">
-                <span class="label">Cost:</span>
-                <span class="value">K{{ product.cost.toFixed(2) }}</span>
+              <div class="detail-item" *ngIf="product.cost">
+                <span class="detail-label">Cost</span>
+                <span class="detail-value">K{{ product.cost.toFixed(2) }}</span>
               </div>
-              <div class="info-row">
-                <span class="label">Stock:</span>
-                <span class="value" [class.low-stock]="(product.quantity || 0) < 10">
-                  {{ product.quantity || 0 }} units
+              <div class="detail-item">
+                <span class="detail-label">Stock</span>
+                <span class="detail-value" [class.low-stock]="(product.quantity || 0) < 10">
+                  {{ product.quantity || 0 }}
                 </span>
               </div>
-              <div class="info-row" *ngIf="product.barcode">
-                <span class="label">Barcode:</span>
-                <span class="value">{{ product.barcode }}</span>
+              <div class="detail-item" *ngIf="product.barcode">
+                <span class="detail-label">Barcode</span>
+                <span class="detail-value barcode">{{ product.barcode }}</span>
               </div>
             </div>
-            <div class="product-actions">
-              <ion-button fill="clear" size="small" (click)="openEditProductModal(product)">
-                <ion-icon name="create-outline" slot="start"></ion-icon>
-                Edit
+
+            <div class="card-actions">
+              <ion-button fill="clear" size="small" (click)="openEditProductModal(product); $event.stopPropagation()">
+                <ion-icon name="create-outline" slot="icon-only"></ion-icon>
               </ion-button>
-              <ion-button fill="clear" size="small" color="danger" (click)="deleteProduct(product)">
-                <ion-icon name="trash-outline" slot="start"></ion-icon>
-                Delete
+              <ion-button fill="clear" size="small" color="danger" (click)="deleteProduct(product); $event.stopPropagation()">
+                <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
               </ion-button>
             </div>
           </ion-card-content>
@@ -123,35 +115,84 @@
     </ion-row>
   </ion-grid>
 
-  <!-- List View -->
-  <div *ngIf="!isLoading() && viewMode() === 'list' && filteredProducts().length > 0" class="list-view">
-    <ion-item *ngFor="let product of filteredProducts()" lines="full" class="product-list-item">
-      <img
-        [src]="product.imageUrl || 'https://via.placeholder.com/100?text=' + product.name"
-        [alt]="product.name"
-        class="list-thumbnail"
-        slot="start"
-        (error)="handleImageError($event)"
-      />
-      <ion-label>
-        <h2>{{ product.name }}</h2>
-        <p *ngIf="product.barcode">Barcode: {{ product.barcode }}</p>
+  <!-- Table View - Clean Responsive Table -->
+  <div *ngIf="!isLoading() && viewMode() === 'list' && filteredProducts().length > 0" class="table-view">
+    <!-- Desktop Table -->
+    <div class="desktop-table">
+      <table class="products-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Barcode</th>
+            <th class="text-right">Price</th>
+            <th class="text-right">Stock</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let product of filteredProducts()" class="table-row">
+            <td class="product-name-cell">
+              <strong>{{ product.name }}</strong>
+            </td>
+            <td>
+              <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
+              <span *ngIf="!product.category" class="text-muted">—</span>
+            </td>
+            <td>
+              <code *ngIf="product.barcode" class="barcode-code">{{ product.barcode }}</code>
+              <span *ngIf="!product.barcode" class="text-muted">—</span>
+            </td>
+            <td class="text-right price-cell">K{{ product.price.toFixed(2) }}</td>
+            <td class="text-right" [class.low-stock]="(product.quantity || 0) < 10">
+              {{ product.quantity || 0 }}
+            </td>
+            <td class="text-center actions-cell">
+              <ion-button fill="clear" size="small" (click)="openEditProductModal(product)">
+                <ion-icon name="create-outline" slot="icon-only"></ion-icon>
+              </ion-button>
+              <ion-button fill="clear" size="small" color="danger" (click)="deleteProduct(product)">
+                <ion-icon name="trash-outline" slot="icon-only"></ion-icon>
+              </ion-button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
-        <div class="list-meta">
+    <!-- Mobile Cards -->
+    <div class="mobile-list">
+      <div *ngFor="let product of filteredProducts()" class="mobile-product-card" (click)="openEditProductModal(product)">
+        <div class="mobile-card-header">
+          <h3>{{ product.name }}</h3>
           <ion-badge *ngIf="product.category" color="primary">{{ product.category }}</ion-badge>
-          <span class="price">K{{ product.price.toFixed(2) }}</span>
-          <span class="stock" [class.low-stock]="(product.quantity || 0) < 10">
-            {{ product.quantity || 0 }} in stock
-          </span>
         </div>
-      </ion-label>
-      <ion-button slot="end" fill="clear" (click)="openEditProductModal(product)">
-        <ion-icon name="create-outline"></ion-icon>
-      </ion-button>
-      <ion-button slot="end" fill="clear" color="danger" (click)="deleteProduct(product)">
-        <ion-icon name="trash-outline"></ion-icon>
-      </ion-button>
-    </ion-item>
+        <div class="mobile-card-body">
+          <div class="mobile-detail">
+            <span class="label">Price:</span>
+            <strong class="price-highlight">K{{ product.price.toFixed(2) }}</strong>
+          </div>
+          <div class="mobile-detail">
+            <span class="label">Stock:</span>
+            <span [class.low-stock]="(product.quantity || 0) < 10">{{ product.quantity || 0 }}</span>
+          </div>
+          <div class="mobile-detail" *ngIf="product.barcode">
+            <span class="label">Barcode:</span>
+            <code class="barcode-code">{{ product.barcode }}</code>
+          </div>
+        </div>
+        <div class="mobile-card-actions">
+          <ion-button fill="clear" size="small" (click)="openEditProductModal(product); $event.stopPropagation()">
+            <ion-icon name="create-outline" slot="start"></ion-icon>
+            Edit
+          </ion-button>
+          <ion-button fill="clear" size="small" color="danger" (click)="deleteProduct(product); $event.stopPropagation()">
+            <ion-icon name="trash-outline" slot="start"></ion-icon>
+            Delete
+          </ion-button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- FAB Buttons -->
