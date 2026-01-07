@@ -134,14 +134,29 @@ export class LoginPage implements OnInit {
     await loading.present();
 
     try {
-      const success = await this.authService.loginWithPin(this.pin, this.tenantId);
+      const result = await this.authService.loginWithPin(this.pin, this.tenantId);
       
-      if (success) {
+      if (result.success) {
         await loading.dismiss();
         this.router.navigate(['/data-loader']);
       } else {
         await loading.dismiss();
-        this.showToast('Invalid PIN');
+        let message = 'Login failed. Please try again.';
+        switch (result.reason) {
+          case 'invalid-pin':
+            message = 'Invalid PIN. Please try again.';
+            break;
+          case 'network-error':
+            message = 'Cannot reach the server right now. Check your connection and try again.';
+            break;
+          case 'no-offline-record':
+            message = 'Offline login not available on this device yet. Please connect to the internet and sign in once.';
+            break;
+          case 'no-tenant':
+            message = 'License information missing. Please re-validate your license.';
+            break;
+        }
+        this.showToast(message);
       }
     } catch (error) {
       await loading.dismiss();

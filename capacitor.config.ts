@@ -13,6 +13,25 @@ const config: CapacitorConfig = {
     allowMixedContent: true
   },
   plugins: {
+    CapacitorSQLite: {
+      iosDatabaseLocation: 'Library/CapacitorDatabase',
+      iosIsEncryption: false,
+      iosKeychainPrefix: 'zpos',
+      iosBiometric: {
+        biometricAuth: false,
+        biometricTitle: 'Biometric login for capacitor sqlite'
+      },
+      androidIsEncryption: false,
+      androidBiometric: {
+        biometricAuth: false,
+        biometricTitle: 'Biometric login for capacitor sqlite',
+        biometricSubTitle: 'Log in using your biometric'
+      },
+      electronIsEncryption: false,
+      electronWindowsLocation: 'C:\\ProgramData\\CapacitorDatabases',
+      electronMacLocation: '/Users/Shared/CapacitorDatabases',
+      electronLinuxLocation: 'Databases'
+    },
     SplashScreen: {
       launchShowDuration: 3000,
       launchAutoHide: true,

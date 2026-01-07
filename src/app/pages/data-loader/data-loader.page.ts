@@ -12,6 +12,8 @@ import {
 import { SettingsService } from '../../core/services/settings.service';
 import { SeedDataService } from '../../core/services/seed-data.service';
 import { SqliteService } from '../../core/services/sqlite.service';
+import { SyncService } from '../../core/services/sync.service';
+import { ProductsService } from '../../core/services/products.service';
 
 @Component({
   selector: 'app-data-loader',
@@ -32,6 +34,8 @@ export class DataLoaderPage implements OnInit {
   private settingsService = inject(SettingsService);
   private seedDataService = inject(SeedDataService);
   private sqliteService = inject(SqliteService);
+  private syncService = inject(SyncService);
+  private productsService = inject(ProductsService);
 
   loadingMessage = signal('Initializing...');
   progress = signal(0);
@@ -113,18 +117,37 @@ export class DataLoaderPage implements OnInit {
       this.progress.set(0.9);
       await this.delay(500);
 
-      // Step 6: Complete
+      // Step 6: Check if we need to sync data from server first
+      this.loadingMessage.set('Checking for existing data...');
+      this.progress.set(0.9);
+      
+      const hasLocalData = await this.checkForLocalData();
+      const onboardingComplete = await this.settingsService.get('onboarding-complete');
+      
+      // If no local data and onboarding not complete, try to sync from server
+      if (!hasLocalData && !onboardingComplete) {
+        this.loadingMessage.set('Syncing your data...');
+        await this.syncDataFromServer();
+        
+        // Check again after sync
+        const hasDataAfterSync = await this.checkForLocalData();
+        
+        // If we now have data after sync, mark onboarding as complete
+        if (hasDataAfterSync) {
+          await this.settingsService.set('onboarding-complete', true);
+          console.log('Data found from server, skipping onboarding');
+        } else {
+          // No data on server either, show onboarding
+          console.log('No data found, showing onboarding');
+          this.router.navigate(['/onboarding'], { replaceUrl: true });
+          return;
+        }
+      }
+
+      // Step 7: Complete
       this.loadingMessage.set('Ready!');
       this.progress.set(1);
       await this.delay(300);
-
-      // After initialization, run onboarding once before entering POS
-      const onboardingComplete = await this.settingsService.get('onboarding-complete');
-
-      if (!onboardingComplete) {
-        this.router.navigate(['/onboarding'], { replaceUrl: true });
-        return;
-      }
 
       // Navigate to appropriate page based on configured default POS mode
       const settings = this.settingsService.settings();
@@ -163,6 +186,59 @@ export class DataLoaderPage implements OnInit {
           ? '/pos-hospitality'
           : '/pos-category'
       ], { replaceUrl: true });
+    }
+  }
+
+  /**
+   * Check if local database has products or categories
+   */
+  private async checkForLocalData(): Promise<boolean> {
+    try {
+      await this.productsService.loadProducts();
+      await this.productsService.loadCategories();
+      
+      const products = this.productsService.products();
+      const categories = this.productsService.categories();
+      
+      const hasData = products.length > 0 || categories.length > 0;
+      console.log(`Local data check: ${products.length} products, ${categories.length} categories`);
+      
+      return hasData;
+    } catch (error) {
+      console.error('Error checking for local data:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Sync data from server on first login from new device
+   */
+  private async syncDataFromServer(): Promise<void> {
+    try {
+      console.log('Attempting to sync data from server...');
+      console.log('Checking authentication status...');
+      
+      const token = await this.settingsService.get('token');
+      const tenantId = await this.settingsService.get('tenantId');
+      
+      console.log('Token exists:', !!token);
+      console.log('TenantId:', tenantId);
+      
+      const result = await this.syncService.pullUpdates();
+      
+      if (result.success && result.pulled > 0) {
+        console.log(`✅ Successfully pulled ${result.pulled} items from server`);
+        // Reload products and categories after sync
+        await this.productsService.loadProducts();
+        await this.productsService.loadCategories();
+      } else if (result.success && result.pulled === 0) {
+        console.log('⚠️ Sync succeeded but no data was returned from server');
+      } else {
+        console.log('❌ Sync failed - no data pulled from server');
+      }
+    } catch (error) {
+      console.error('❌ Error syncing from server:', error);
+      // Don't throw - allow app to continue even if sync fails
     }
   }
 

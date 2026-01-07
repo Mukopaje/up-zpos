@@ -327,6 +327,15 @@
       <ion-label>Data Management</ion-label>
     </ion-list-header>
 
+    <ion-item button (click)="viewSyncStatus()">
+      <ion-icon name="cloud-outline" slot="start" color="primary"></ion-icon>
+      <ion-label>
+        <h2>Sync Status</h2>
+        <p>View sync info & manually sync data</p>
+      </ion-label>
+      <ion-icon name="chevron-forward-outline" slot="end"></ion-icon>
+    </ion-item>
+
     <ion-item>
       <ion-icon name="download-outline" slot="start"></ion-icon>
       <ion-label>

@@ -64,7 +64,10 @@ export class SyncService {
         // Send batch to backend using ApiService
         const response = await this.apiService.syncOutbox(batch);
 
-        if (response.success) {
+        // Mark items as synced based on processed count, not success flag
+        // Backend may return success:false if ANY item failed, but processed count tells us
+        // how many actually succeeded (including duplicates)
+        if (response.processed > 0) {
           // Mark all items as synced
           for (const item of outboxItems) {
             await this.sqliteService.markOutboxItemAsSynced(item.id!);
@@ -75,6 +78,12 @@ export class SyncService {
           await this.sqliteService.clearSyncedOutboxItems();
 
           console.log(`Successfully synced ${syncedCount} items`);
+        }
+        
+        // Track failed count from response
+        if (response.failed > 0) {
+          failedCount = response.failed;
+          console.warn(`${failedCount} items failed to sync:`, response.errors);
         }
       } catch (error: any) {
         console.error('Error syncing batch to cloud:', error);
@@ -119,8 +128,11 @@ export class SyncService {
     try {
       // Check if authenticated
       if (!this.authService.isAuthenticated()) {
+        console.error('❌ Pull sync failed: Not authenticated');
         throw new Error('Not authenticated');
       }
+      
+      console.log('✅ Authentication check passed, starting sync...');
 
       let hasMore = true;
       let currentCursor = this.syncCursor;
@@ -128,7 +140,18 @@ export class SyncService {
       while (hasMore) {
         try {
           // Pull updates from backend using ApiService
+          console.log('📡 Calling backend API to pull updates with cursor:', currentCursor);
           const response: any = await this.apiService.pullUpdates(currentCursor.toString());
+          
+          console.log('📦 Sync response:', {
+            productsCount: response.products?.length || 0,
+            customersCount: response.customers?.length || 0,
+            salesCount: response.sales?.length || 0,
+            categoriesCount: response.categories?.length || 0,
+            newCursor: response.newCursor,
+            hasMore: response.hasMore
+          });
+          console.log('📦 Full response:', response);
 
           // Update products
           for (const product of response.products || []) {

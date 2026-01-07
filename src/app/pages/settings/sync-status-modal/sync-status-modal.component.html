@@ -1,0 +1,132 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>Sync Status</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="close()">
+        <ion-icon name="close-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <div *ngIf="isLoading()" class="loading-container">
+    <ion-spinner></ion-spinner>
+    <p>Loading sync status...</p>
+  </div>
+
+  <div *ngIf="!isLoading()">
+    <!-- Local Database Stats -->
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>📊 Local Database</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-list lines="none">
+          <ion-item>
+            <ion-label>Products</ion-label>
+            <ion-badge slot="end" color="primary">{{ productsCount() }}</ion-badge>
+          </ion-item>
+          <ion-item>
+            <ion-label>Categories</ion-label>
+            <ion-badge slot="end" color="primary">{{ categoriesCount() }}</ion-badge>
+          </ion-item>
+          <ion-item>
+            <ion-label>Customers</ion-label>
+            <ion-badge slot="end" color="primary">{{ customersCount() }}</ion-badge>
+          </ion-item>
+          <ion-item>
+            <ion-label>Sales</ion-label>
+            <ion-badge slot="end" color="primary">{{ salesCount() }}</ion-badge>
+          </ion-item>
+          <ion-item>
+            <ion-label>Unsynced Changes</ion-label>
+            <ion-badge 
+              slot="end" 
+              [color]="unsyncedCount() > 0 ? 'warning' : 'success'">
+              {{ unsyncedCount() }}
+            </ion-badge>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Authentication Status -->
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>🔐 Authentication</ion-card-title>
+      </ion-card-header>
+      <ion-card-content>
+        <ion-list lines="none">
+          <ion-item>
+            <ion-label>Auth Token</ion-label>
+            <ion-icon 
+              slot="end" 
+              [name]="hasToken() ? 'checkmark-circle-outline' : 'close-circle-outline'"
+              [color]="hasToken() ? 'success' : 'danger'">
+            </ion-icon>
+          </ion-item>
+          <ion-item>
+            <ion-label>Tenant ID</ion-label>
+            <ion-icon 
+              slot="end" 
+              [name]="hasTenantId() ? 'checkmark-circle-outline' : 'close-circle-outline'"
+              [color]="hasTenantId() ? 'success' : 'danger'">
+            </ion-icon>
+          </ion-item>
+          <ion-item>
+            <ion-label>User ID</ion-label>
+            <ion-icon 
+              slot="end" 
+              [name]="hasUserId() ? 'checkmark-circle-outline' : 'close-circle-outline'"
+              [color]="hasUserId() ? 'success' : 'danger'">
+            </ion-icon>
+          </ion-item>
+          <ion-item *ngIf="hasTenantId()">
+            <ion-label class="ion-text-wrap">
+              <p style="font-size: 0.75rem; color: var(--ion-color-medium);">
+                Tenant: {{ tenantId() }}
+              </p>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Sync Actions -->
+    <div class="sync-actions">
+      <ion-button 
+        expand="block" 
+        (click)="syncFromCloud()"
+        [disabled]="!hasToken() || !hasTenantId()">
+        <ion-icon slot="start" name="cloud-download-outline"></ion-icon>
+        Sync from Cloud
+      </ion-button>
+
+      <ion-button 
+        expand="block" 
+        (click)="syncToCloud()"
+        color="secondary"
+        [disabled]="!hasToken() || !hasTenantId() || unsyncedCount() === 0">
+        <ion-icon slot="start" name="cloud-upload-outline"></ion-icon>
+        Sync to Cloud ({{ unsyncedCount() }})
+      </ion-button>
+
+      <ion-button 
+        expand="block" 
+        fill="outline"
+        (click)="loadSyncStatus()">
+        <ion-icon slot="start" name="refresh-outline"></ion-icon>
+        Refresh Status
+      </ion-button>
+    </div>
+
+    <!-- Help Text -->
+    <div class="help-text ion-padding">
+      <p class="ion-text-center" style="color: var(--ion-color-medium); font-size: 0.875rem;">
+        <strong>Sync from Cloud:</strong> Download products, categories, and customers from the server.<br>
+        <strong>Sync to Cloud:</strong> Upload your local sales and changes to the server.
+      </p>
+    </div>
+  </div>
+</ion-content>

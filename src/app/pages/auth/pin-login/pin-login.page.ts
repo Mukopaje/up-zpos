@@ -116,9 +116,9 @@ export class PinLoginPage implements OnInit {
     this.isLoading.set(true);
 
     try {
-      const success = await this.authService.loginWithPin(pinValue);
+      const result = await this.authService.loginWithPin(pinValue);
       
-      if (success) {
+      if (result.success) {
         // Get user to show welcome message
         const user = this.authService.currentUser();
         await this.showToast(`Welcome ${user?.firstName || 'User'}!`, 'success');
@@ -126,7 +126,25 @@ export class PinLoginPage implements OnInit {
         // Navigate to data loader then POS
         this.router.navigate(['/data-loader'], { replaceUrl: true });
       } else {
-        await this.showToast('Invalid PIN. Please try again.');
+        let message = 'Login failed. Please try again.';
+        switch (result.reason) {
+          case 'invalid-pin':
+            message = 'Invalid PIN. Please try again.';
+            break;
+          case 'network-error':
+            message = 'Cannot reach the server right now. Check your connection and try again.';
+            break;
+          case 'no-offline-record':
+            message = 'Offline login not available on this device yet. Please connect to the internet and sign in once.';
+            break;
+          case 'no-tenant':
+            message = 'License information missing. Please re-activate your license.';
+            break;
+        }
+        await this.showToast(message);
+        if (result.reason === 'no-tenant') {
+          this.router.navigate(['/license-login'], { replaceUrl: true });
+        }
         this.onClear();
       }
     } catch (error) {

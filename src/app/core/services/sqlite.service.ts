@@ -290,14 +290,57 @@ export class SqliteService {
       }
 
       console.log('Creating database connection...');
-      // Create/open database
-      this.db = await this.sqlite.createConnection(
-        this.dbName,
-        false, // encrypted
-        'no-encryption',
-        1, // version
-        false // readonly
-      );
+      
+      // Try to create connection with retry for Android Keystore issues
+      let retries = 3;
+      let lastError: any;
+      
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          // On Android, check if connection already exists and close it first
+          if (this.platform === 'android' && attempt > 1) {
+            try {
+              const isConnection = await this.sqlite.isConnection(this.dbName, false);
+              if (isConnection.result) {
+                console.log(`Closing existing connection before retry ${attempt}`);
+                await this.sqlite.closeConnection(this.dbName, false);
+              }
+            } catch (e) {
+              console.log('Error checking/closing connection:', e);
+            }
+          }
+          
+          // Create/open database
+          this.db = await this.sqlite.createConnection(
+            this.dbName,
+            false, // encrypted
+            'no-encryption',
+            1, // version
+            false // readonly
+          );
+          
+          console.log('Database connection created successfully');
+          break; // Success, exit retry loop
+          
+        } catch (error: any) {
+          lastError = error;
+          console.error(`Connection attempt ${attempt} failed:`, error);
+          
+          // If it's a Keystore error and we have retries left, wait and retry
+          if (error?.message?.includes('Keystore') && attempt < retries) {
+            console.log(`Waiting before retry ${attempt + 1}...`);
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+            continue;
+          }
+          
+          // If it's not a Keystore error or we're out of retries, throw
+          throw error;
+        }
+      }
+      
+      if (!this.db) {
+        throw lastError || new Error('Failed to create database connection');
+      }
 
       console.log('Opening database...');
       await this.db.open();

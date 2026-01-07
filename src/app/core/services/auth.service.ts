@@ -60,6 +60,12 @@ export interface RecoverLicenseResponse {
   message: string;
 }
 
+export interface PinLoginResult {
+  success: boolean;
+  mode?: 'online' | 'offline';
+  reason?: 'no-tenant' | 'invalid-pin' | 'network-error' | 'no-offline-record';
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -157,12 +163,23 @@ export class AuthService {
    * Hash password using Web Crypto API (secure in browser)
    */
   private async hashPassword(password: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
+    try {
+      if (typeof crypto !== 'undefined' && (crypto as any).subtle) {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await (crypto as any).subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        return hashHex;
+      }
+    } catch (error) {
+      console.warn('Web Crypto hashing failed, falling back to simple hash:', error);
+    }
+
+    // Fallback: simple hash for environments without Web Crypto (e.g. some desktop runtimes)
+    // Not cryptographically strong, but sufficient for local PIN/password comparison.
+    const fallback = `fallback_${password}`;
+    return fallback;
   }
 
   /**
@@ -400,16 +417,17 @@ export class AuthService {
    * PIN-based login with tenant context
    * Step 2 of multi-tenant authentication
    */
-  async loginWithPin(pin: string, tenantId?: string): Promise<boolean> {
-    try {
-      // Get tenantId from parameter or storage
-      const tenant = tenantId || await this.storage.get<string>('tenantId');
-      
-      if (!tenant) {
-        console.error('No tenant context - validate license first');
-        return false;
-      }
+  async loginWithPin(pin: string, tenantId?: string): Promise<PinLoginResult> {
+    // Get tenantId from parameter or storage
+    const tenant = tenantId || await this.storage.get<string>('tenantId');
+    
+    if (!tenant) {
+      console.error('No tenant context - validate license first');
+      return { success: false, reason: 'no-tenant' };
+    }
 
+    // First try online validation
+    try {
       // Call backend validate-pin endpoint
       const response = await firstValueFrom(
         this.http.post<LoginResponse>(`${this.API_URL}/auth/validate-pin`, { 
@@ -419,107 +437,188 @@ export class AuthService {
       );
 
       if (response.access_token && response.user) {
-        console.log('PIN validation successful, saving auth data...');
+        console.log('PIN validation successful (online), saving auth data...');
+
+        // Persist auth data and user locally
+        await this.handleOnlinePinLoginSuccess(response, pin, tenant);
         
-        // Save tokens and tenant info
-        await this.storage.set('token', response.access_token);
-        await this.storage.set('tenantId', tenant);
+        // Log token for debugging (first 20 chars only)
+        const storedToken = await this.storage.get<string>('token');
+        console.log('Token stored (first 20 chars):', storedToken?.substring(0, 20));
         
-        const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
-        await this.storage.set('expires', expires);
-        await this.storage.set('userId', response.user.id);
-
-        // Map backend role to frontend role ID (backend: "admin", frontend: "role_admin")
-        const roleMapping: Record<string, string> = {
-          'admin': 'role_admin',
-          'manager': 'role_manager',
-          'cashier': 'role_cashier',
-          'waiter': 'role_waiter',
-          'kitchen': 'role_kitchen'
-        };
-        
-        const mappedRoleId = roleMapping[response.user.role] || `role_${response.user.role}`;
-        
-        // Convert backend user format to local User model
-        const user: User = {
-          _id: response.user.id,
-          type: 'user',
-          tenantId: tenant,
-          firstName: response.user.firstName,
-          lastName: response.user.lastName,
-          email: response.user.email,
-          roleId: mappedRoleId,
-          active: true,
-          createdAt: Date.now(),
-          updatedAt: Date.now(),
-          lastLogin: Date.now()
-        };
-
-        console.log('Saving user to local store:', user._id);
-        const existingUser = await this.usersService.getUserById(user._id);
-        if (existingUser) {
-          await this.usersService.updateUser({ ...existingUser, ...user });
-        } else {
-          await this.usersService.createUser({
-            tenantId: user.tenantId,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            username: user.username,
-            email: user.email,
-            phone: user.phone,
-            roleId: user.roleId,
-            role: user.role,
-            permissions: user.permissions,
-            pin: user.pin,
-            active: user.active,
-            allowedTerminals: user.allowedTerminals,
-            defaultTerminal: user.defaultTerminal,
-            posMode: user.posMode,
-            language: user.language,
-            avatar: user.avatar,
-            passwordHash: user.passwordHash,
-            pinHash: user.pinHash
-          });
-        }
-
-        // Load or create role
-        console.log('Loading role:', user.roleId);
-        let role = await this.rolesService.getRole(user.roleId);
-        if (!role) {
-          console.log('Role not found, initializing default roles');
-          // Initialize default roles if they don't exist
-          await this.rolesService.initializeDefaultRoles();
-          // Try loading the role again
-          role = await this.rolesService.getRole(user.roleId);
-          
-          if (!role) {
-            console.error('Failed to load role after initialization:', user.roleId);
-            // This shouldn't happen, but create a fallback
-            throw new Error(`Role ${user.roleId} not found`);
-          }
-          console.log('Role loaded after initialization:', role.name);
-        } else {
-          console.log('Role loaded:', role.name);
-        }
-
-        // Update state
-        console.log('Updating auth state');
-        this.authState.set({
-          user,
-          role: role || null,
-          terminal: null,
-          token: response.access_token,
-          expires
-        });
-
-        console.log('Login completed successfully');
-        return true;
+        console.log('Login completed successfully (online)');
+        return { success: true, mode: 'online' };
       }
+
       console.log('No access token or user in response');
-      return false;
-    } catch (error) {
+      return { success: false, reason: 'invalid-pin' };
+    } catch (error: any) {
       console.error('PIN login error:', error);
-      return false;
+
+      // Determine if this looks like a network/server error where
+      // we should fall back to offline PIN validation.
+      const isHttpError = error instanceof HttpErrorResponse;
+      const status = isHttpError ? error.status : undefined;
+      const isNetworkOrServerError = !isHttpError || status === 0 || (status !== undefined && status >= 500);
+
+      if (!isNetworkOrServerError) {
+        // For 4xx auth errors (invalid PIN, forbidden, etc.) do not
+        // fall back to offline validation to avoid bypassing backend rules.
+        return { success: false, reason: 'invalid-pin' };
+      }
+
+      console.warn('Backend unreachable or server error during PIN login, attempting offline PIN validation...');
+      return await this.tryOfflinePinLogin(pin, tenant);
+    }
+  }
+
+  private async handleOnlinePinLoginSuccess(response: LoginResponse, pin: string, tenantId: string): Promise<void> {
+    // Save tokens and tenant info
+    await this.storage.set('token', response.access_token);
+    await this.storage.set('tenantId', tenantId);
+
+    const expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+    await this.storage.set('expires', expires);
+    await this.storage.set('userId', response.user.id);
+
+    // Map backend role to frontend role ID (backend: "admin", frontend: "role_admin")
+    const roleMapping: Record<string, string> = {
+      'admin': 'role_admin',
+      'manager': 'role_manager',
+      'cashier': 'role_cashier',
+      'waiter': 'role_waiter',
+      'kitchen': 'role_kitchen'
+    };
+    
+    const mappedRoleId = roleMapping[response.user.role] || `role_${response.user.role}`;
+
+    // Hash the PIN locally so we can support offline PIN login later
+    const pinHash = await this.hashPin(pin);
+
+    // Convert backend user format to local User model
+    const user: User = {
+      _id: response.user.id,
+      type: 'user',
+      tenantId,
+      firstName: response.user.firstName,
+      lastName: response.user.lastName,
+      email: response.user.email,
+      roleId: mappedRoleId,
+      pinHash,
+      active: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastLogin: Date.now()
+    };
+
+    console.log('Saving user to local store:', user._id);
+    const existingUser = await this.usersService.getUserById(user._id);
+    if (existingUser) {
+      await this.usersService.updateUser({ ...existingUser, ...user });
+    } else {
+      await this.usersService.createUser({
+        tenantId: user.tenantId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        roleId: user.roleId,
+        role: user.role,
+        permissions: user.permissions,
+        pin: user.pin,
+        active: user.active,
+        allowedTerminals: user.allowedTerminals,
+        defaultTerminal: user.defaultTerminal,
+        posMode: user.posMode,
+        language: user.language,
+        avatar: user.avatar,
+        passwordHash: user.passwordHash,
+        pinHash: user.pinHash
+      });
+    }
+
+    // Load or create role
+    console.log('Loading role:', user.roleId);
+    let role = await this.rolesService.getRole(user.roleId);
+    if (!role) {
+      console.log('Role not found, initializing default roles');
+      // Initialize default roles if they don't exist
+      await this.rolesService.initializeDefaultRoles();
+      // Try loading the role again
+      role = await this.rolesService.getRole(user.roleId);
+      
+      if (!role) {
+        console.error('Failed to load role after initialization:', user.roleId);
+        // This shouldn't happen, but create a fallback
+        throw new Error(`Role ${user.roleId} not found`);
+      }
+      console.log('Role loaded after initialization:', role.name);
+    } else {
+      console.log('Role loaded:', role.name);
+    }
+
+    // Update state
+    console.log('Updating auth state');
+    this.authState.set({
+      user,
+      role: role || null,
+      terminal: null,
+      token: response.access_token,
+      expires
+    });
+  }
+
+  private async tryOfflinePinLogin(pin: string, tenantId: string): Promise<PinLoginResult> {
+    try {
+      // Look up all active users for this tenant from local SQLite
+      const users = await this.usersService.getActiveUsersByTenant(tenantId);
+
+      for (const user of users) {
+        if (user.pinHash && await this.verifyPin(pin, user.pinHash)) {
+          console.log('Offline PIN match found for user:', user._id);
+
+          // Reuse existing token if available, otherwise create a local-only token
+          let token = await this.storage.get<string>('token');
+          let expires = await this.storage.get<number>('expires');
+
+          if (!token || !expires || new Date().getTime() > expires) {
+            token = 'offline-token';
+            expires = Date.now() + (24 * 60 * 60 * 1000); // 24 hours
+            await this.storage.set('token', token);
+            await this.storage.set('expires', expires);
+          }
+
+          await this.storage.set('tenantId', tenantId);
+          await this.storage.set('userId', user._id);
+
+          // Load role information for this user
+          console.log('Loading role for offline login:', user.roleId);
+          let role = await this.rolesService.getRole(user.roleId);
+          if (!role) {
+            console.log('Role not found locally, initializing default roles');
+            await this.rolesService.initializeDefaultRoles();
+            role = await this.rolesService.getRole(user.roleId);
+          }
+
+          this.authState.set({
+            user,
+            role: role || null,
+            terminal: null,
+            token,
+            expires
+          });
+
+          console.log('Login completed successfully (offline)');
+          return { success: true, mode: 'offline' };
+        }
+      }
+
+      console.warn('Offline PIN login failed: no matching user for provided PIN');
+      return { success: false, reason: 'no-offline-record' };
+    } catch (error) {
+      console.error('Offline PIN login error:', error);
+      return { success: false, reason: 'network-error' };
     }
   }
 
@@ -679,6 +778,8 @@ export class AuthService {
 
       if (response.user) {
         // Save new user to local DB
+        const pinHash = await this.hashPin(userData.pin);
+
         const newUser: User = {
           _id: response.user.id,
           type: 'user',
@@ -687,6 +788,7 @@ export class AuthService {
           lastName: response.user.lastName,
           email: response.user.email,
           roleId: response.user.role,
+           pinHash,
           active: true,
           createdAt: Date.now(),
           updatedAt: Date.now()

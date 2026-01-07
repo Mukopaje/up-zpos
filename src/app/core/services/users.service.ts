@@ -98,6 +98,20 @@ export class UsersService {
     return null;
   }
 
+  async getActiveUsersByTenant(tenantId: string): Promise<User[]> {
+    try {
+      await this.sqlite.ensureInitialized();
+      const rows = await this.sqlite.getUsers();
+      const users = rows
+        .filter(row => row.tenant_id === tenantId && (row.active === undefined ? true : row.active === 1))
+        .map(row => this.mapRowToUser(row));
+      return users;
+    } catch (error) {
+      console.error('Error getting users by tenant:', error);
+      return [];
+    }
+  }
+
   private mapRowToUser(row: UserRow): User {
     const permissions = row.permissions ? JSON.parse(row.permissions) : undefined;
     const allowedTerminals = row.allowed_terminals

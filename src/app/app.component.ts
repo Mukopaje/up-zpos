@@ -88,6 +88,7 @@ export class AppComponent implements OnInit {
   private alertCtrl = inject(AlertController);
   private menuCtrl = inject(MenuController);
   private printJobsClient = inject(PrintJobsClientService);
+  private syncService: any;  // Lazy inject to avoid circular dependency
 
   // Signals
   menuCollapsed = signal(false);
@@ -178,6 +179,7 @@ export class AppComponent implements OnInit {
     this.registerIcons();
     this.setupRouteListener();
     this.startPrintJobsPolling();
+    this.startAutoSync();
   }
   async ngOnInit() {
     await this.initDataService.initializeDefaultData();
@@ -242,6 +244,7 @@ export class AppComponent implements OnInit {
   }
 
   private printJobsIntervalId: any;
+  private autoSyncIntervalId: any;
 
   private startPrintJobsPolling() {
     if (this.printJobsIntervalId) {
@@ -259,6 +262,58 @@ export class AppComponent implements OnInit {
         console.error('Error processing print jobs:', error);
       }
     }, 15000);
+  }
+
+  private async startAutoSync() {
+    // Lazy inject SyncService to avoid circular dependency
+    if (!this.syncService) {
+      const { inject } = await import('@angular/core');
+      const { SyncService } = await import('./core/services/sync.service');
+      this.syncService = inject(SyncService);
+    }
+
+    if (this.autoSyncIntervalId) {
+      return;
+    }
+
+    // Auto sync every 5 minutes (300000ms)
+    this.autoSyncIntervalId = setInterval(async () => {
+      try {
+        // Only sync if authenticated and not already syncing
+        const isAuth = await this.authService.isAuthenticated();
+        if (isAuth && !this.syncService.isSyncInProgress()) {
+          console.log('🔄 Auto sync: Starting bidirectional sync...');
+          
+          // Pull updates from cloud (get new products/categories)
+          const pullResult = await this.syncService.pullUpdates();
+          if (pullResult.success && pullResult.pulled > 0) {
+            console.log(`✅ Auto sync: Pulled ${pullResult.pulled} items from cloud`);
+          }
+
+          // Push local changes to cloud (sync sales/products)
+          const pushResult = await this.syncService.syncToCloud();
+          if (pushResult.success && pushResult.synced > 0) {
+            console.log(`✅ Auto sync: Pushed ${pushResult.synced} items to cloud`);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Auto sync failed:', error);
+      }
+    }, 300000); // 5 minutes
+
+    // Also run sync immediately on app start (after 10 seconds delay)
+    setTimeout(async () => {
+      try {
+        const isAuth = await this.authService.isAuthenticated();
+        if (isAuth && !this.syncService.isSyncInProgress()) {
+          console.log('🔄 Initial auto sync on app start...');
+          await this.syncService.pullUpdates();
+          await this.syncService.syncToCloud();
+        }
+      } catch (error) {
+        console.error('Initial sync failed:', error);
+      }
+    }, 10000);
   }
 
   private async initializeApp() {

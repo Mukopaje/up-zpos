@@ -20,7 +20,8 @@ import {
   AlertController,
   ToastController,
   LoadingController,
-  ActionSheetController
+  ActionSheetController,
+  ModalController
 } from '@ionic/angular/standalone';
 import { addIcons } from 'ionicons';
 import {
@@ -49,7 +50,8 @@ import {
   cartOutline,
   colorPaletteOutline,
   pricetagOutline,
-  personCircleOutline
+  personCircleOutline,
+  cloudOutline
 } from 'ionicons/icons';
 
 import { PrinterSettings, LoyaltyProgram } from '../../models';
@@ -59,6 +61,8 @@ import { SqliteService } from '../../core/services/sqlite.service';
 import { ProductsService } from '../../core/services/products.service';
 import { LoyaltyServiceClient } from '../../core/services/loyalty.service';
 import { AuthService } from '../../core/services/auth.service';
+import { SyncService } from '../../core/services/sync.service';
+import { SyncStatusModalComponent } from './sync-status-modal/sync-status-modal.component';
 
 @Component({
   selector: 'app-settings',
@@ -90,6 +94,7 @@ export class SettingsPage implements OnInit {
   private alertCtrl = inject(AlertController);
   private toastCtrl = inject(ToastController);
   private loadingCtrl = inject(LoadingController);
+  private modalCtrl = inject(ModalController);
   private actionSheetCtrl = inject(ActionSheetController);
   settingsService = inject(SettingsService);
   private storage = inject(StorageService);
@@ -97,6 +102,7 @@ export class SettingsPage implements OnInit {
   private productsService = inject(ProductsService);
   private loyaltyService = inject(LoyaltyServiceClient);
   authService = inject(AuthService);
+  private syncService = inject(SyncService);
 
   printerSettings = signal<PrinterSettings>({
     autoPrint: false,
@@ -171,7 +177,8 @@ export class SettingsPage implements OnInit {
       'cart-outline': cartOutline,
       'color-palette-outline': colorPaletteOutline,
       'pricetag-outline': pricetagOutline,
-      'person-circle-outline': personCircleOutline
+      'person-circle-outline': personCircleOutline,
+      'cloud-outline': cloudOutline
     });
   }
 
@@ -1236,6 +1243,68 @@ export class SettingsPage implements OnInit {
       ]
     });
     await alert.present();
+  }
+
+  async viewSyncStatus() {
+    try {
+      const modal = await this.modalCtrl.create({
+        component: SyncStatusModalComponent
+      });
+      await modal.present();
+    } catch (error) {
+      console.error('Error loading sync status:', error);
+      await this.showToast('Failed to load sync status');
+    }
+  }
+
+  async syncFromCloud() {
+    const loading = await this.loadingCtrl.create({
+      message: 'Pulling data from cloud...'
+    });
+    await loading.present();
+
+    try {
+      const result = await this.syncService.pullUpdates();
+      
+      await loading.dismiss();
+
+      if (result.success) {
+        await this.showToast(`✅ Successfully synced ${result.pulled} items from cloud`);
+        
+        // Reload data
+        await this.productsService.loadProducts();
+        await this.productsService.loadCategories();
+      } else {
+        await this.showToast('⚠️ Sync completed but no data was pulled');
+      }
+    } catch (error) {
+      await loading.dismiss();
+      console.error('Sync from cloud error:', error);
+      await this.showToast('❌ Failed to sync from cloud: ' + error);
+    }
+  }
+
+  async syncToCloud() {
+    const loading = await this.loadingCtrl.create({
+      message: 'Pushing data to cloud...'
+    });
+    await loading.present();
+
+    try {
+      const result = await this.syncService.syncToCloud();
+      
+      await loading.dismiss();
+
+      if (result.success) {
+        await this.showToast(`✅ Successfully synced ${result.synced} items to cloud`);
+      } else {
+        await this.showToast(`⚠️ Sync completed: ${result.synced} synced, ${result.failed} failed`);
+      }
+    } catch (error) {
+      await loading.dismiss();
+      console.error('Sync to cloud error:', error);
+      await this.showToast('❌ Failed to sync to cloud: ' + error);
+    }
   }
 
   private async showToast(message: string) {

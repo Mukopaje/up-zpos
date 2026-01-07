@@ -22,7 +22,12 @@ export class ApiService {
     // Add auth token if available
     const token = await this.storage.get<string>('token');
     if (token) {
-      headers = headers.set('Authorization', `Bearer ${token}`);
+      // Clean token - remove any quotes that might have been added during storage
+      const cleanToken = token.replace(/^["']|["']$/g, '');
+      headers = headers.set('Authorization', `Bearer ${cleanToken}`);
+      console.log('Auth header set with token (first 20 chars):', cleanToken.substring(0, 20));
+    } else {
+      console.warn('⚠️ No auth token found in storage');
     }
 
     return headers;
@@ -172,7 +177,7 @@ export class ApiService {
       const headers = await this.getHeaders();
       const response = await firstValueFrom(
         this.http.post<any>(
-          `${this.baseUrl}/sync/outbox`,
+          `${this.baseUrl}/sync/outbox/batch`,
           { items },
           { headers }
         ).pipe(catchError(this.handleError))
