@@ -172,8 +172,8 @@ export class SyncService {
             
             if (!existing) {
               await this.sqliteService.addCategory(category);
-            } else if ((category.version || 0) > (existing.version || 0)) {
-              // Only update if cloud version is newer
+            } else {
+              // Always update from cloud to keep in sync
               await this.sqliteService.updateCategory(category.id!, category);
             }
             totalPulled++;

@@ -24,6 +24,7 @@ import {
   IonCardHeader,
   IonCardTitle,
   IonCardContent,
+  IonText,
   AlertController,
   ToastController,
   ModalController,
@@ -87,6 +88,7 @@ import { Category } from '../../models';
     IonCardHeader,
     IonCardTitle,
     IonCardContent,
+    IonText,
   ],
 })
 export class CategoriesPage implements OnInit {
