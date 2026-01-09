@@ -123,7 +123,7 @@ export class AppComponent implements OnInit {
         permission: 'products',
         items: [
           { title: 'Products', url: '/products-management', icon: 'cube-outline', permission: 'products' },
-          { title: 'Categories', url: '/categories', icon: 'pricetags-outline', permission: 'products' },
+          { title: 'Categories', url: '/categories', icon: 'pricetag-outline', permission: 'products' },
           { title: 'Modifier Groups', url: '/modifier-groups', icon: 'layers-outline', permission: 'products' },
           { title: 'Inventory', url: '/inventory', icon: 'layers-outline', permission: 'inventory' },
         ]

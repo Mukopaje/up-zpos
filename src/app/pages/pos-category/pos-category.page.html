@@ -335,57 +335,6 @@
             }
           </div>
 
-          <!-- Selected Customer Banner (always visible in cart view) -->
-          <div class="cart-customer-banner">
-            @if (selectedCustomer()) {
-              <div class="customer-chip">
-                <div class="customer-main">
-                  <ion-icon name="person" class="customer-icon"></ion-icon>
-                  <div class="customer-text">
-                    <div class="customer-name">{{ selectedCustomer()!.name }}</div>
-                    <div class="customer-meta">
-                      @if (selectedCustomer()!.phone) {
-                        <span>{{ selectedCustomer()!.phone }}</span>
-                      }
-                      @if (selectedCustomer()!.balance > 0 || selectedCustomer()!.creditLimit > 0) {
-                        <span>
-                          
-                          @if (selectedCustomer()!.balance > 0) {
-                            Balance: ZMW {{ selectedCustomer()!.balance | number:'1.2-2' }}
-                          }
-                          @if (selectedCustomer()!.creditLimit > 0) {
-                            
-                            @if (selectedCustomer()!.balance > 0) {
-                              
-                              ·
-                            }
-                            Credit: ZMW {{ (selectedCustomer()!.creditLimit - selectedCustomer()!.balance) | number:'1.2-2' }}
-                          }
-                        </span>
-                      }
-                    </div>
-                  </div>
-                </div>
-                <ion-button fill="clear" size="small" (click)="clearCustomer()">
-                  <ion-icon name="close" slot="icon-only"></ion-icon>
-                </ion-button>
-              </div>
-            } @else {
-              <div class="customer-chip empty" (click)="selectCustomer()">
-                <div class="customer-main">
-                  <ion-icon name="person" class="customer-icon"></ion-icon>
-                  <div class="customer-text">
-                    <div class="customer-name">No customer selected</div>
-                    <div class="customer-meta">Tap to select a customer</div>
-                  </div>
-                </div>
-                <ion-button fill="outline" size="small" (click)="selectCustomer(); $event.stopPropagation()">
-                  Select
-                </ion-button>
-              </div>
-            }
-          </div>
-
           <div class="cart-main-layout">
             <div class="ticket-side-panel" *ngIf="!isMobile()">
               <div class="panel-header">
@@ -440,6 +389,19 @@
               } @else {
                 <ion-card class="cart-items-card">
                   <ion-card-content>
+                    <!-- Compact Customer Display -->
+                    @if (selectedCustomer()) {
+                      <div class="ticket-customer-bar">
+                        <div class="customer-info-compact">
+                          <ion-icon name="person-outline"></ion-icon>
+                          <span class="customer-name-compact">{{ selectedCustomer()!.name }}</span>
+                        </div>
+                        <ion-button fill="clear" size="small" (click)="clearCustomer()">
+                          <ion-icon name="close" slot="icon-only"></ion-icon>
+                        </ion-button>
+                      </div>
+                    }
+                    
                     <ion-list lines="full">
                       <ion-item
                         *ngFor="let item of cartItems()"

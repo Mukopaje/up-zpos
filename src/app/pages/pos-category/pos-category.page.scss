@@ -215,8 +215,8 @@ ion-content {
   padding-right: 8px;
   padding-top: 4px;
   padding-bottom: 4px;
-  background: var(--ion-color-light);
-  border-radius: 8px;
+  background: transparent;
+  border-radius: 0;
 
   .panel-header {
     display: flex;
@@ -241,24 +241,27 @@ ion-content {
   .panel-buttons {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 
     ion-button {
-      /* Single-color, tall SambaPOS-style action buttons */
-      --background: #f5f5f5;
-      --background-activated: #e6e6e6;
-      --background-hover: #ebebeb;
-      --color: #222;
+      /* Neutral-colored buttons matching background */
+      --background: var(--ion-background-color, #ffffff);
+      --background-activated: var(--ion-color-light-shade);
+      --background-hover: var(--ion-color-light);
+      --color: var(--ion-text-color, #000000);
       --border-radius: 4px;
-      --border-color: #d0d0d0;
+      --border-width: 1px;
+      --border-style: solid;
+      --border-color: var(--ion-color-light-shade);
       font-size: 14px;
       font-weight: 500;
       --padding-start: 12px;
       --padding-end: 12px;
-      height: 56px;
+      height: 52px;
       justify-content: flex-start;
       text-transform: none;
       letter-spacing: 0;
+      --box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     }
   }
 }
@@ -394,6 +397,43 @@ ion-content {
   ion-item {
     --padding-start: 0;
     --inner-padding-end: 0;
+  }
+}
+
+.ticket-customer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--ion-color-light);
+  border-bottom: 1px solid var(--ion-color-light-shade);
+  margin-bottom: 4px;
+
+  .customer-info-compact {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 500;
+
+    ion-icon {
+      font-size: 16px;
+      color: var(--ion-color-primary);
+    }
+
+    .customer-name-compact {
+      color: var(--ion-text-color);
+    }
+  }
+
+  ion-button {
+    --padding-start: 4px;
+    --padding-end: 4px;
+    height: 28px;
+    
+    ion-icon {
+      font-size: 18px;
+    }
   }
 }
 
