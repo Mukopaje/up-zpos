@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal, computed, effect } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, effect, Injector } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, NavigationEnd } from '@angular/router';
 import { 
@@ -52,6 +52,7 @@ import { AuthService } from './core/services/auth.service';
 import { SettingsService } from './core/services/settings.service';
 import { InitDataService } from './core/services/init-data.service';
 import { PrintJobsClientService } from './core/services/print-jobs-client.service';
+import { SyncService } from './core/services/sync.service';
 
 @Component({
   selector: 'app-root',
@@ -88,7 +89,8 @@ export class AppComponent implements OnInit {
   private alertCtrl = inject(AlertController);
   private menuCtrl = inject(MenuController);
   private printJobsClient = inject(PrintJobsClientService);
-  private syncService: any;  // Lazy inject to avoid circular dependency
+  private injector = inject(Injector);
+  private syncService?: SyncService;  // Lazy inject to avoid circular dependency
 
   // Signals
   menuCollapsed = signal(false);
@@ -268,9 +270,7 @@ export class AppComponent implements OnInit {
   private async startAutoSync() {
     // Lazy inject SyncService to avoid circular dependency
     if (!this.syncService) {
-      const { inject } = await import('@angular/core');
-      const { SyncService } = await import('./core/services/sync.service');
-      this.syncService = inject(SyncService);
+      this.syncService = this.injector.get(SyncService);
     }
 
     if (this.autoSyncIntervalId) {
@@ -282,7 +282,7 @@ export class AppComponent implements OnInit {
       try {
         // Only sync if authenticated and not already syncing
         const isAuth = await this.authService.isAuthenticated();
-        if (isAuth && !this.syncService.isSyncInProgress()) {
+        if (isAuth && this.syncService && !this.syncService.isSyncInProgress()) {
           console.log('🔄 Auto sync: Starting bidirectional sync...');
           
           // Pull updates from cloud (get new products/categories)
@@ -306,7 +306,7 @@ export class AppComponent implements OnInit {
     setTimeout(async () => {
       try {
         const isAuth = await this.authService.isAuthenticated();
-        if (isAuth && !this.syncService.isSyncInProgress()) {
+        if (isAuth && this.syncService && !this.syncService.isSyncInProgress()) {
           console.log('🔄 Initial auto sync on app start...');
           await this.syncService.pullUpdates();
           await this.syncService.syncToCloud();
