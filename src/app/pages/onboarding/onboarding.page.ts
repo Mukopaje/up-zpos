@@ -20,11 +20,13 @@ import {
   IonText,
   IonSegment,
   IonSegmentButton,
-  IonProgressBar
+  IonProgressBar,
+  IonNote
 } from '@ionic/angular/standalone';
 
 import { SettingsService } from '../../core/services/settings.service';
 import { StorageService } from '../../core/services/storage.service';
+import { COUNTRIES, Country, getCountryByName } from '../../core/data/countries.data';
 
 @Component({
   selector: 'app-onboarding',
@@ -51,7 +53,8 @@ import { StorageService } from '../../core/services/storage.service';
     IonText,
     IonSegment,
     IonSegmentButton,
-    IonProgressBar
+    IonProgressBar,
+    IonNote
   ]
 })
 export class OnboardingPage {
@@ -60,8 +63,22 @@ export class OnboardingPage {
   private storage = inject(StorageService);
   private fb = inject(FormBuilder);
 
-  step = signal<1 | 2 | 3>(1);
+  // Add step 0 for country selection
+  step = signal<0 | 1 | 2 | 3>(0);
 
+  // Country data
+  countries = COUNTRIES;
+  selectedCountry = signal<Country | null>(null);
+  availableCities = computed(() => this.selectedCountry()?.cities || []);
+  supportsZRA = computed(() => this.selectedCountry()?.supportsZRA || false);
+
+  // Step 0: Location Form (Country & City)
+  locationForm = this.fb.group({
+    country: ['', Validators.required],
+    city: ['', Validators.required],
+  });
+
+  // Step 1: Business Form
   businessForm = this.fb.group({
     businessName: ['', Validators.required],
     businessType: ['retail', Validators.required],
@@ -82,6 +99,9 @@ export class OnboardingPage {
 
   canGoNext = computed(() => {
     const current = this.step();
+    if (current === 0) {
+      return this.locationForm.valid;
+    }
     if (current === 1) {
       return this.businessForm.valid;
     }
@@ -104,6 +124,15 @@ export class OnboardingPage {
   ngOnInit() {
     const current = this.settingsService.settings();
 
+    // Check if location was already set
+    if (current.country && current.city) {
+      this.locationForm.patchValue({
+        country: current.country,
+        city: current.city,
+      });
+      this.onCountryChange(current.country);
+    }
+
     this.businessForm.patchValue({
       businessName: current.businessName || 'ZPOS',
       businessType: current.businessType || 'retail',
@@ -123,8 +152,27 @@ export class OnboardingPage {
     });
   }
 
+  onCountryChange(countryName: string) {
+    const country = getCountryByName(countryName);
+    this.selectedCountry.set(country || null);
+    
+    // Reset city when country changes
+    this.locationForm.patchValue({ city: '' });
+    
+    // Auto-fill currency and timezone if country supports it
+    if (country) {
+      this.invoiceForm.patchValue({
+        currency: country.currency,
+      });
+    }
+  }
+
   async next() {
     const current = this.step();
+    if (current === 0 && this.locationForm.valid) {
+      this.step.set(1);
+      return;
+    }
     if (current === 1 && this.businessForm.valid) {
       this.step.set(2);
       return;
@@ -140,8 +188,10 @@ export class OnboardingPage {
 
   back() {
     const current = this.step();
-    if (current === 1) return;
-    if (current === 2) {
+    if (current === 0) return; // Can't go back from location
+    if (current === 1) {
+      this.step.set(0);
+    } else if (current === 2) {
       this.step.set(1);
     } else if (current === 3) {
       this.step.set(2);
@@ -149,16 +199,24 @@ export class OnboardingPage {
   }
 
   async skip() {
+    // Cannot skip - location is mandatory
+    if (this.step() === 0) {
+      return;
+    }
+    
     await this.storage.set('onboarding-complete', true);
     this.router.navigate(['/pos'], { replaceUrl: true });
   }
 
   private async finish() {
+    const location = this.locationForm.value;
     const business = this.businessForm.value;
     const invoice = this.invoiceForm.value;
     const posMode = this.posModeForm.value;
 
     await this.settingsService.updateSettings({
+      country: location.country || '',
+      city: location.city || '',
       businessName: business.businessName || 'ZPOS',
       businessType: business.businessType || 'retail',
       address: business.address || '',
@@ -172,6 +230,11 @@ export class OnboardingPage {
     if (invoice.prefix) {
       await this.storage.set('invoice_prefix', invoice.prefix.toUpperCase());
     }
+
+    // Store ZRA support flag
+    await this.storage.set('zra_supported', this.supportsZRA());
+    await this.storage.set('country', location.country);
+    await this.storage.set('city', location.city);
 
     await this.storage.set('onboarding-complete', true);
     this.router.navigate(['/pos'], { replaceUrl: true });

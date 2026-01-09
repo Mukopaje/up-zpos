@@ -1,12 +1,14 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 import { SqliteService, Customer as SqlCustomer } from './sqlite.service';
 import { Customer } from '../../models';
+import { SyncService } from './sync.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CustomersService {
   private sqlite = inject(SqliteService);
+  private syncService = inject(SyncService);
 
   // Reactive state
   private customersState = signal<Customer[]>([]);
@@ -144,6 +146,7 @@ export class CustomersService {
         throw new Error('Failed to load created customer');
       }
 
+      this.triggerImmediateSync();
       return this.mapSqlCustomerToApp(row);
     } catch (error) {
       console.error('Error creating customer:', error);
@@ -175,6 +178,7 @@ export class CustomersService {
         throw new Error('Customer not found after update');
       }
 
+      this.triggerImmediateSync();
       return this.mapSqlCustomerToApp(row);
     } catch (error) {
       console.error('Error updating customer:', error);
@@ -190,6 +194,7 @@ export class CustomersService {
       await this.sqlite.ensureInitialized();
       await this.sqlite.deleteCustomer(id);
       await this.loadCustomers();
+      this.triggerImmediateSync();
     } catch (error) {
       console.error('Error deleting customer:', error);
       throw error;
@@ -204,6 +209,7 @@ export class CustomersService {
       await this.sqlite.ensureInitialized();
       await this.sqlite.deleteCustomer(id);
       await this.loadCustomers();
+      this.triggerImmediateSync();
     } catch (error) {
       console.error('Error permanently deleting customer:', error);
       throw error;
@@ -392,5 +398,19 @@ export class CustomersService {
     return this.customersState().filter(c => 
       c.balance > 0 && c.active
     );
+  }
+
+  /**
+   * Trigger immediate sync after data changes
+   */
+  private triggerImmediateSync(): void {
+    setTimeout(async () => {
+      if (!this.syncService.isSyncInProgress()) {
+        console.log('🔄 Triggering immediate sync after customer change...');
+        await this.syncService.syncToCloud();
+      } else {
+        console.log('⏳ Sync already in progress, will be picked up in next cycle');
+      }
+    }, 100);
   }
 }

@@ -5,6 +5,7 @@ import { CartService } from './cart.service';
 import { Order, CartItem, Customer } from '../../models';
 import { ProductsService } from './products.service';
 import { CustomersService } from './customers.service';
+import { SyncService } from './sync.service';
 
 export interface Payment {
   _id?: string;
@@ -42,6 +43,7 @@ export class OrdersService {
   private sqlite = inject(SqliteService);
   private productsService = inject(ProductsService);
   private customersService = inject(CustomersService);
+  private syncService = inject(SyncService);
 
   constructor(
     private storage: StorageService,
@@ -352,6 +354,9 @@ export class OrdersService {
       orders.unshift(createdOrder);
       this.orders.set(orders);
 
+      // Trigger immediate sync for transactions
+      this.triggerImmediateSync();
+
       return createdOrder;
     } catch (error) {
       console.error('Error creating order:', error);
@@ -566,5 +571,22 @@ export class OrdersService {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     return this.getOrders(today, tomorrow);
+  }
+
+  /**
+   * Trigger immediate sync (non-blocking)
+   * Used after transactions to sync sales immediately
+   */
+  private triggerImmediateSync(): void {
+    setTimeout(async () => {
+      try {
+        if (!this.syncService.isSyncInProgress()) {
+          console.log('🔄 Triggering immediate sync after transaction...');
+          await this.syncService.syncToCloud();
+        }
+      } catch (error) {
+        console.error('❌ Immediate sync failed:', error);
+      }
+    }, 100);
   }
 }

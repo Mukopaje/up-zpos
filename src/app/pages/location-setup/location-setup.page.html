@@ -1,0 +1,96 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>Setup Location</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="location-setup-content">
+  <div class="location-setup-container">
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>📍 Where is your business located?</ion-card-title>
+      </ion-card-header>
+
+      <ion-card-content>
+        @if (isExistingUser()) {
+          <ion-text color="medium">
+            <p>
+              To continue using ZPOS, please select your business location. 
+              This enables region-specific features like ZRA integration.
+            </p>
+          </ion-text>
+        } @else {
+          <ion-text color="medium">
+            <p>
+              Select your country and city to enable location-specific features.
+            </p>
+          </ion-text>
+        }
+
+        <form [formGroup]="locationForm">
+          <ion-list lines="full">
+            <ion-item>
+              <ion-label position="stacked">Country *</ion-label>
+              <ion-select 
+                formControlName="country" 
+                interface="popover" 
+                placeholder="Select your country"
+                (ionChange)="onCountryChange($event.detail.value)">
+                @for (country of countries; track country.code) {
+                  <ion-select-option [value]="country.name">
+                    {{ country.name }}
+                    @if (country.supportsZRA) {
+                      <span> 🇿🇲</span>
+                    }
+                  </ion-select-option>
+                }
+              </ion-select>
+            </ion-item>
+
+            @if (availableCities().length > 0) {
+              <ion-item>
+                <ion-label position="stacked">City / Town *</ion-label>
+                <ion-select 
+                  formControlName="city" 
+                  interface="popover" 
+                  placeholder="Select your city">
+                  @for (city of availableCities(); track city) {
+                    <ion-select-option [value]="city">{{ city }}</ion-select-option>
+                  }
+                </ion-select>
+              </ion-item>
+            }
+          </ion-list>
+        </form>
+
+        @if (supportsZRA()) {
+          <div class="feature-card success">
+            <ion-text color="success">
+              <p><strong>✅ ZRA Smart Invoice Available</strong></p>
+              <p>Your location supports ZRA fiscalization for tax compliance.</p>
+            </ion-text>
+          </div>
+        } @else if (selectedCountry()) {
+          <div class="feature-card">
+            <ion-text color="medium">
+              <p><strong>ℹ️ ZRA Integration Not Available</strong></p>
+              <p>ZRA Smart Invoice is currently only available for Zambian businesses.</p>
+            </ion-text>
+          </div>
+        }
+
+        <ion-note color="medium">
+          <p><small>* This information is required to continue. You can change it later in Settings.</small></p>
+        </ion-note>
+
+        <ion-button 
+          expand="block" 
+          [disabled]="!canSave"
+          (click)="saveLocation()"
+          class="save-button">
+          Continue
+        </ion-button>
+      </ion-card-content>
+    </ion-card>
+  </div>
+</ion-content>

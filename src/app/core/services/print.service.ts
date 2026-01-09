@@ -3,6 +3,7 @@ import { Platform } from '@ionic/angular/standalone';
 import { BleClient, BleDevice, numberToUUID } from '@capacitor-community/bluetooth-le';
 import { StorageService } from './storage.service';
 import { SettingsService } from './settings.service';
+import { SyncService } from './sync.service';
 import { Printer, PrinterSettings, ReceiptData, CartItem, Table, KitchenOrder } from '../../models';
 import { ESC_POS_COMMANDS, PrinterCommands } from './printer-commands';
 import { NetworkPrinter } from '../plugins/network-printer.plugin';
@@ -16,6 +17,7 @@ export class PrintService {
   private platform = inject(Platform);
   private storage = inject(StorageService);
   private settings = inject(SettingsService);
+  private syncService = inject(SyncService);
 
   // Printer state
   printers = signal<Printer[]>([]);
@@ -213,6 +215,7 @@ export class PrintService {
     
     this.printerSettings.set(updated);
     await this.storage.set('printer-settings', updated);
+    this.triggerImmediateSync();
   }
 
   /**
@@ -495,18 +498,49 @@ export class PrintService {
    * Build receipt content
    */
   private buildReceipt(data: ReceiptData): string {
+    console.log('buildReceipt called with data:', {
+      orderId: data.orderId,
+      orderNumber: data.orderNumber,
+      items: data.items?.length || 0,
+      total: data.total,
+      hasItems: !!data.items,
+      itemsIsArray: Array.isArray(data.items)
+    });
+
+    // Log first item if items exist
+    if (data.items && data.items.length > 0) {
+      console.log('First item:', data.items[0]);
+    } else {
+      console.warn('NO ITEMS IN RECEIPT DATA!');
+    }
+
     const settings = this.printerSettings();
     const appSettings = this.settings.settings();
     const width = this.getLineWidth();
     const cmd = ESC_POS_COMMANDS;
     let receipt = '';
 
-    // Resolve receipt identity details with fallback to business settings
-    const name = settings.businessInfo.name || appSettings.businessName || 'ZPOS';
-    const address = settings.businessInfo.address || appSettings.address || '';
-    const email = settings.businessInfo.email || appSettings.email || '';
-    const phone = settings.businessInfo.phone || appSettings.phone || '';
-    const taxId = settings.businessInfo.taxId || settings.businessInfo.taxNumber || '';
+    // Resolve receipt identity details with fallback chain:
+    // 1. Printer settings businessInfo
+    // 2. App settings (businessName, address, etc.)
+    // 3. Hardcoded defaults
+    const name = settings.businessInfo.name || 
+                 appSettings.businessName || 
+                 'POS SYSTEM';
+    const address = settings.businessInfo.address || 
+                    appSettings.address || 
+                    '';
+    const email = settings.businessInfo.email || 
+                  appSettings.email || 
+                  '';
+    const phone = settings.businessInfo.phone || 
+                  appSettings.phone || 
+                  '';
+    const taxId = settings.businessInfo.taxId || 
+                  settings.businessInfo.taxNumber || 
+                  '';
+
+    console.log('Receipt header info:', { name, address, email, phone, taxId });
 
     // Initialize printer
     receipt += cmd.HARDWARE.HW_INIT;
@@ -574,17 +608,29 @@ export class PrintService {
     // Items section (left aligned)
     receipt += cmd.TEXT_FORMAT.TXT_ALIGN_LT;
 
-    for (const item of data.items) {
-      const qty = item.quantity || item.qty || 0;
-      const itemLines = PrinterCommands.formatItemLine(
-        item.name,
-        qty,
-        item.price,
-        item.total,
-        width
-      );
-      receipt += itemLines.join(cmd.EOL);
+    // Ensure items exist and is an array
+    const items = data.items || [];
+    console.log(`Processing ${items.length} items for receipt`);
+
+    if (items.length === 0) {
+      console.warn('WARNING: No items to print on receipt!');
+      receipt += cmd.TEXT_FORMAT.TXT_ALIGN_CT;
+      receipt += 'No items';
       receipt += cmd.EOL;
+    } else {
+      for (const item of items) {
+        console.log('Processing item:', item.name, 'qty:', item.quantity || item.qty);
+        const qty = item.quantity || item.qty || 0;
+        const itemLines = PrinterCommands.formatItemLine(
+          item.name,
+          qty,
+          item.price,
+          item.total,
+          width
+        );
+        receipt += itemLines.join(cmd.EOL);
+        receipt += cmd.EOL;
+      }
     }
 
     // Separator and header for totals section
@@ -932,6 +978,13 @@ export class PrintService {
   async printReceipt(data: ReceiptData, retries = 0): Promise<boolean> {
     const printer = this.defaultPrinter();
     
+    console.log('printReceipt called with data:', {
+      orderNumber: data.orderNumber,
+      items: data.items?.length,
+      total: data.total,
+      printer: printer ? `${printer.name} (${printer.driver})` : 'NONE'
+    });
+    
     if (!printer || !printer.printing) {
       const errorMsg = 'No printer configured or printing is disabled.';
       this.lastError.set(errorMsg);
@@ -956,11 +1009,16 @@ export class PrintService {
     this.lastError.set(null);
 
     try {
+      console.log('Building receipt data...');
       const receiptData = this.buildReceipt(data);
+      console.log('Receipt built, length:', receiptData.length, 'chars');
+      
       const settings = this.printerSettings();
       
       // Print multiple copies if configured
       for (let i = 0; i < settings.printCopies; i++) {
+        console.log(`Sending to printer (copy ${i + 1}/${settings.printCopies})...`);
+        
         // Print with timeout
         await Promise.race([
           this.sendToPrinter(receiptData),
@@ -1158,8 +1216,12 @@ export class PrintService {
       return;
     }
 
+    console.log('printViaL156 called, data length:', data.length);
+    console.log('First 200 chars:', data.substring(0, 200));
+
     try {
       await L156Printer.printRaw({ data });
+      console.log('L156 printRaw completed successfully');
     } catch (err) {
       console.error('L156 print failed', err);
       throw err;
@@ -1354,5 +1416,19 @@ export class PrintService {
     const drawerCommand = cmd.CASH_DRAWER.CD_KICK_2 + cmd.CASH_DRAWER.CD_KICK_5;
     
     await this.sendToPrinter(drawerCommand);
+  }
+
+  /**
+   * Trigger immediate sync after settings changes
+   */
+  private triggerImmediateSync(): void {
+    setTimeout(async () => {
+      if (!this.syncService.isSyncInProgress()) {
+        console.log('🔄 Triggering immediate sync after printer settings change...');
+        await this.syncService.syncToCloud();
+      } else {
+        console.log('⏳ Sync already in progress, will be picked up in next cycle');
+      }
+    }, 100);
   }
 }

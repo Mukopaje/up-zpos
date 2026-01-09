@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 import { StorageService } from './storage.service';
 import { SqliteService, Product as SqlProduct, Category as SqlCategory, MenuRow } from './sqlite.service';
 import { Product, Category, ItemInv, Menu } from '../../models';
+import { SyncService } from './sync.service';
 
 interface Department {
   _id: string;
@@ -18,6 +19,7 @@ interface Department {
 export class ProductsService {
   private sqlite = inject(SqliteService);
   private storage = inject(StorageService);
+  private syncService = inject(SyncService);
 
   // Reactive state with signals
   products = signal<Product[]>([]);
@@ -280,6 +282,10 @@ export class ProductsService {
       await this.loadProducts();
 
       const row = await this.sqlite.getProductById(id);
+      
+      // Trigger immediate sync
+      this.triggerImmediateSync();
+      
       return row ? this.mapSqlProductToApp(row) : null;
     } catch (error) {
       console.error('Error creating product:', error);
@@ -317,6 +323,10 @@ export class ProductsService {
       await this.loadProducts();
 
       const row = await this.sqlite.getProductById(id);
+      
+      // Trigger immediate sync
+      this.triggerImmediateSync();
+      
       return row ? this.mapSqlProductToApp(row) : null;
     } catch (error) {
       console.error('Error updating product:', error);
@@ -332,6 +342,10 @@ export class ProductsService {
       await this.sqlite.ensureInitialized();
       await this.sqlite.deleteProduct(id);
       await this.loadProducts();
+      
+      // Trigger immediate sync
+      this.triggerImmediateSync();
+      
       return true;
     } catch (error) {
       console.error('Error deleting product:', error);
@@ -415,6 +429,10 @@ export class ProductsService {
       const row = await this.sqlite.getCategoryById(id);
       const mapped = row ? this.mapSqlCategoryToApp(row) : null;
       this._categorySubject.next(mapped);
+      
+      // Trigger immediate sync for online systems
+      this.triggerImmediateSync();
+      
       return mapped;
     } catch (error) {
       console.error('Error creating category:', error);
@@ -450,6 +468,10 @@ export class ProductsService {
       const row = await this.sqlite.getCategoryById(id);
       const mapped = row ? this.mapSqlCategoryToApp(row) : null;
       this._categorySubject.next(mapped);
+      
+      // Trigger immediate sync for online systems
+      this.triggerImmediateSync();
+      
       return mapped;
     } catch (error) {
       console.error('Error updating category:', error);
@@ -465,6 +487,10 @@ export class ProductsService {
       await this.sqlite.ensureInitialized();
       await this.sqlite.deleteCategory(id);
       await this.loadCategories();
+      
+      // Trigger immediate sync
+      this.triggerImmediateSync();
+      
       return true;
     } catch (error) {
       console.error('Error deleting category:', error);
@@ -697,5 +723,23 @@ export class ProductsService {
       console.error('Error deleting menu:', error);
       throw error;
     }
+  }
+
+  /**
+   * Trigger immediate sync (non-blocking)
+   * Used after create/update operations to sync changes immediately
+   */
+  private triggerImmediateSync(): void {
+    // Run sync in background without blocking
+    setTimeout(async () => {
+      try {
+        if (!this.syncService.isSyncInProgress()) {
+          console.log('🔄 Triggering immediate sync after data change...');
+          await this.syncService.syncToCloud();
+        }
+      } catch (error) {
+        console.error('❌ Immediate sync failed:', error);
+      }
+    }, 100);
   }
 }

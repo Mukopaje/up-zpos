@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, TitleCasePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { RouterLink, Router } from '@angular/router';
 import {
   IonHeader,
   IonToolbar,
@@ -51,7 +51,8 @@ import {
   colorPaletteOutline,
   pricetagOutline,
   personCircleOutline,
-  cloudOutline
+  cloudOutline,
+  globeOutline
 } from 'ionicons/icons';
 
 import { PrinterSettings, LoyaltyProgram } from '../../models';
@@ -178,7 +179,8 @@ export class SettingsPage implements OnInit {
       'color-palette-outline': colorPaletteOutline,
       'pricetag-outline': pricetagOutline,
       'person-circle-outline': personCircleOutline,
-      'cloud-outline': cloudOutline
+      'cloud-outline': cloudOutline,
+      'globe-outline': globeOutline
     });
   }
 
@@ -544,6 +546,13 @@ export class SettingsPage implements OnInit {
     });
 
     await alert.present();
+  }
+
+  async editLocation() {
+    const router = inject(Router);
+    await router.navigate(['/location-setup'], {
+      queryParams: { returnUrl: '/settings' }
+    });
   }
 
   async editField(field: string, label: string, currentValue?: string, isTextarea = false) {

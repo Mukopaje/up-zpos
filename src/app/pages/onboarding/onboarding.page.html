@@ -2,7 +2,9 @@
   <ion-toolbar color="primary">
     <ion-title>Setup ZPOS</ion-title>
     <ion-buttons slot="end">
-      <ion-button color="light" (click)="skip()">Skip</ion-button>
+      @if (step() !== 0) {
+        <ion-button color="light" (click)="skip()">Skip</ion-button>
+      }
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
@@ -12,6 +14,9 @@
     <div class="onboarding-panel">
       <div class="onboarding-steps">
         <ion-segment [value]="step()" color="primary">
+          <ion-segment-button [value]="0">
+            <ion-label>Location</ion-label>
+          </ion-segment-button>
           <ion-segment-button [value]="1">
             <ion-label>Business</ion-label>
           </ion-segment-button>
@@ -23,8 +28,71 @@
           </ion-segment-button>
         </ion-segment>
 
-        <ion-progress-bar [value]="step() / 3" color="primary"></ion-progress-bar>
+        <ion-progress-bar [value]="(step() + 1) / 4" color="primary"></ion-progress-bar>
       </div>
+
+      @if (step() === 0) {
+        <div class="step-body">
+          <h2>📍 Location</h2>
+          <p>Select your country and city. This is <strong>required</strong> to enable region-specific features.</p>
+
+          <form [formGroup]="locationForm">
+            <ion-list lines="full">
+              <ion-item>
+                <ion-label position="stacked">Country *</ion-label>
+                <ion-select 
+                  formControlName="country" 
+                  interface="popover" 
+                  placeholder="Select your country"
+                  (ionChange)="onCountryChange($event.detail.value)">
+                  @for (country of countries; track country.code) {
+                    <ion-select-option [value]="country.name">
+                      {{ country.name }}
+                      @if (country.supportsZRA) {
+                        <span> 🇿🇲</span>
+                      }
+                    </ion-select-option>
+                  }
+                </ion-select>
+              </ion-item>
+
+              @if (availableCities().length > 0) {
+                <ion-item>
+                  <ion-label position="stacked">City / Town *</ion-label>
+                  <ion-select 
+                    formControlName="city" 
+                    interface="popover" 
+                    placeholder="Select your city">
+                    @for (city of availableCities(); track city) {
+                      <ion-select-option [value]="city">{{ city }}</ion-select-option>
+                    }
+                  </ion-select>
+                </ion-item>
+              }
+            </ion-list>
+          </form>
+
+          @if (supportsZRA()) {
+            <div class="feature-card success">
+              <ion-text color="success">
+                <p><strong>✅ ZRA Smart Invoice Integration Available</strong></p>
+                <p>Your location supports ZRA fiscalization for tax compliance.</p>
+              </ion-text>
+            </div>
+          } @else if (selectedCountry()) {
+            <div class="feature-card">
+              <ion-text color="medium">
+                <p><strong>ℹ️ ZRA Integration Not Available</strong></p>
+                <p>ZRA Smart Invoice is currently only available for businesses operating in Zambia.</p>
+              </ion-text>
+            </div>
+          }
+
+          <ion-note color="medium">
+            <p><small>* Required field. You can change this later in Settings if you relocate your business.</small></p>
+          </ion-note>
+        </div>
+      }
 
       @if (step() === 1) {
         <div class="step-body">
@@ -138,7 +206,7 @@
 <ion-footer>
   <ion-toolbar color="primary">
     <ion-buttons slot="start">
-      <ion-button color="light" (click)="back()" [disabled]="step() === 1">Back</ion-button>
+      <ion-button color="light" (click)="back()" [disabled]="step() === 0">Back</ion-button>
     </ion-buttons>
 
     <ion-buttons slot="end">

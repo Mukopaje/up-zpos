@@ -277,7 +277,7 @@ export class AppComponent implements OnInit {
       return;
     }
 
-    // Auto sync every 5 minutes (300000ms)
+    // Auto sync every 1 minute (60000ms) for online systems
     this.autoSyncIntervalId = setInterval(async () => {
       try {
         // Only sync if authenticated and not already syncing
@@ -300,9 +300,9 @@ export class AppComponent implements OnInit {
       } catch (error) {
         console.error('❌ Auto sync failed:', error);
       }
-    }, 300000); // 5 minutes
+    }, 60000); // 1 minute for immediate sync when online
 
-    // Also run sync immediately on app start (after 10 seconds delay)
+    // Run sync immediately on app start (after 3 seconds to allow init)
     setTimeout(async () => {
       try {
         const isAuth = await this.authService.isAuthenticated();
@@ -314,7 +314,7 @@ export class AppComponent implements OnInit {
       } catch (error) {
         console.error('Initial sync failed:', error);
       }
-    }, 10000);
+    }, 3000);
   }
 
   private async initializeApp() {

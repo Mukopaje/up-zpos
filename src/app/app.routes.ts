@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { AuthGuard } from './core/guards/auth.guard';
 import { posRedirectGuard } from './core/guards/pos-redirect.guard';
+import { locationSetupGuard } from './core/guards/location-setup.guard';
 
 export const routes: Routes = [
   {
@@ -26,9 +27,14 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/auth/register/register.page').then(m => m.RegisterPage)
   },
   {
+    path: 'location-setup',
+    loadComponent: () => import('./pages/location-setup/location-setup.page').then(m => m.LocationSetupPage),
+    canActivate: [AuthGuard]
+  },
+  {
     path: 'data-loader',
     loadComponent: () => import('./pages/data-loader/data-loader.page').then(m => m.DataLoaderPage),
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard, locationSetupGuard]
   },
   {
     path: 'onboarding',
@@ -38,17 +44,17 @@ export const routes: Routes = [
   {
     path: 'pos-retail',
     loadComponent: () => import('./pages/pos-retail/pos-retail.page').then(m => m.PosRetailPage),
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard, locationSetupGuard]
   },
   {
     path: 'pos-category',
     loadComponent: () => import('./pages/pos-category/pos-category.page').then(m => m.PosCategoryPage),
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard, locationSetupGuard]
   },
   {
     path: 'pos-hospitality',
     loadComponent: () => import('./pages/pos-hospitality/pos-hospitality.page').then(m => m.PosHospitalityPage),
-    canActivate: [AuthGuard]
+    canActivate: [AuthGuard, locationSetupGuard]
   },
   {
     path: 'pos',

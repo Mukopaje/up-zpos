@@ -1,5 +1,6 @@
 import { Injectable, signal, inject } from '@angular/core';
 import { StorageService } from './storage.service';
+import { SyncService } from './sync.service';
 
 export interface AppMode {
   retail: boolean;
@@ -13,6 +14,8 @@ export interface AppSettings {
   mode: AppMode;
   businessName?: string;
   businessType?: string;
+  country?: string; // Country where business operates
+  city?: string; // City/Town location
   defaultPosMode?: 'retail' | 'category' | 'hospitality';
   address?: string;
   phone?: string;
@@ -43,6 +46,7 @@ export interface AppSettings {
 })
 export class SettingsService {
   private storage = inject(StorageService);
+  private syncService = inject(SyncService);
 
   // Reactive settings state
   private settingsState = signal<AppSettings>({
@@ -95,6 +99,7 @@ export class SettingsService {
     
     this.settingsState.set(updated);
     await this.storage.set('app-settings', updated);
+    this.triggerImmediateSync();
   }
 
   async changeMode(mode: keyof AppMode): Promise<void> {
@@ -141,5 +146,19 @@ export class SettingsService {
    */
   async set(key: string, value: any): Promise<void> {
     await this.storage.set(key, value);
+  }
+
+  /**
+   * Trigger immediate sync after settings changes
+   */
+  private triggerImmediateSync(): void {
+    setTimeout(async () => {
+      if (!this.syncService.isSyncInProgress()) {
+        console.log('🔄 Triggering immediate sync after settings change...');
+        await this.syncService.syncToCloud();
+      } else {
+        console.log('⏳ Sync already in progress, will be picked up in next cycle');
+      }
+    }, 100);
   }
 }

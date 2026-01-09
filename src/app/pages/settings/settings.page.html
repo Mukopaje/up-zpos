@@ -34,6 +34,14 @@
       </ion-label>
     </ion-item>
 
+    <ion-item button (click)="editLocation()">
+      <ion-icon name="globe-outline" slot="start"></ion-icon>
+      <ion-label>
+        <h2>Location</h2>
+        <p>{{ appSettings().city || 'Not set' }}, {{ appSettings().country || 'Not set' }}</p>
+      </ion-label>
+    </ion-item>
+
     <ion-item button (click)="selectPosMode()">
       <ion-icon name="cart-outline" slot="start"></ion-icon>
       <ion-label>
