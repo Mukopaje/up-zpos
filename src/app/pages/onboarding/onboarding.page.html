@@ -97,6 +97,50 @@
       @if (step() === 1) {
         <div class="step-body">
           <h2>Business details</h2>
+          
+          @if (supportsZRA()) {
+            <p>Enter your <strong>ZRA TPIN</strong> to automatically configure your business details.</p>
+            
+            <form [formGroup]="tpinForm" (ngSubmit)="onTpinConfig()">
+              <ion-list lines="full">
+                <ion-item>
+                  <ion-label position="stacked">TPIN (10 digits) *</ion-label>
+                  <ion-input
+                    formControlName="tpin"
+                    type="text"
+                    inputmode="numeric"
+                    placeholder="e.g. 1000123456">
+                  </ion-input>
+                </ion-item>
+              </ion-list>
+
+              @if (autoConfigError()) {
+                <div class="error-note">
+                  <ion-text color="danger">
+                    <p><small>{{ autoConfigError() }}</small></p>
+                  </ion-text>
+                </div>
+              }
+
+              <div class="auto-config-actions">
+                <ion-button
+                  expand="block"
+                  fill="outline"
+                  [disabled]="tpinForm.invalid || isAutoConfiguring()"
+                  (click)="onTpinConfig()">
+                  @if (isAutoConfiguring()) {
+                    <ion-spinner name="crescent"></ion-spinner>
+                  } @else {
+                    Auto-Configure with ZRA
+                  }
+                </ion-button>
+                <div class="divider">
+                  <span>OR</span>
+                </div>
+              </div>
+            </form>
+          }
+
           <p>Tell us about your business so we can personalize ZPOS.</p>
 
           <form [formGroup]="businessForm">

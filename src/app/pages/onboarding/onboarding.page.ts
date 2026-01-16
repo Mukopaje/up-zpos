@@ -21,7 +21,8 @@ import {
   IonSegment,
   IonSegmentButton,
   IonProgressBar,
-  IonNote
+  IonNote,
+  IonSpinner
 } from '@ionic/angular/standalone';
 
 import { SettingsService } from '../../core/services/settings.service';
@@ -54,7 +55,8 @@ import { COUNTRIES, Country, getCountryByName } from '../../core/data/countries.
     IonSegment,
     IonSegmentButton,
     IonProgressBar,
-    IonNote
+    IonNote,
+    IonSpinner
   ]
 })
 export class OnboardingPage {
@@ -77,6 +79,14 @@ export class OnboardingPage {
     country: ['', Validators.required],
     city: ['', Validators.required],
   });
+
+  // TPIN Auto-Config Form
+  tpinForm = this.fb.group({
+    tpin: ['', [Validators.required, Validators.pattern(/^\d{10}$/)]],
+  });
+
+  isAutoConfiguring = signal(false);
+  autoConfigError = signal<string | null>(null);
 
   // Step 1: Business Form
   businessForm = this.fb.group({
@@ -103,6 +113,7 @@ export class OnboardingPage {
       return this.locationForm.valid;
     }
     if (current === 1) {
+      if (this.supportsZRA() && this.tpinForm.valid) return true;
       return this.businessForm.valid;
     }
     if (current === 2) {
@@ -167,14 +178,50 @@ export class OnboardingPage {
     }
   }
 
+  async onTpinConfig() {
+    if (this.tpinForm.invalid) return;
+
+    this.isAutoConfiguring.set(true);
+    this.autoConfigError.set(null);
+
+    try {
+      // In a real app, this would call the Backend API
+      // For this implementation, we simulate the auto-configuration
+      // const response = await this.api.post('/zra/auto-configure', { tpin: this.tpinForm.value.tpin });
+      
+      this.businessForm.patchValue({
+        businessName: 'ZRA Auto-Configured Store', // Simulated result
+        address: 'Lusaka CBD, Zambia',
+      });
+
+      this.invoiceForm.patchValue({
+        taxRate: 16,
+        currency: 'ZMW'
+      });
+
+      // Advance to next step automatically
+      this.step.set(2);
+    } catch (error: any) {
+      this.autoConfigError.set(error.message || 'Failed to auto-configure with TPIN');
+    } finally {
+      this.isAutoConfiguring.set(false);
+    }
+  }
+
   async next() {
     const current = this.step();
     if (current === 0 && this.locationForm.valid) {
       this.step.set(1);
       return;
     }
-    if (current === 1 && this.businessForm.valid) {
-      this.step.set(2);
+    if (current === 1) {
+      if (this.supportsZRA() && this.tpinForm.valid && !this.businessForm.dirty) {
+         await this.onTpinConfig();
+         return;
+      }
+      if (this.businessForm.valid) {
+        this.step.set(2);
+      }
       return;
     }
     if (current === 2 && this.invoiceForm.valid) {

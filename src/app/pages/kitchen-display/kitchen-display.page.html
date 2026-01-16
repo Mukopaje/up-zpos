@@ -1,0 +1,61 @@
+<ion-header>
+  <ion-toolbar color="primary">
+    <ion-title>Kitchen Display (KDS)</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="refresh()">
+        <ion-icon slot="icon-only" name="refresh-outline"></ion-icon>
+      </ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="kds-content">
+  <ion-refresher slot="fixed" (ionRefresh)="refresh($event)">
+    <ion-refresherContent></ion-refresherContent>
+  </ion-refresher>
+
+  <div class="kds-grid">
+    @for (order of orders(); track order.tableId) {
+      <ion-card class="order-card" [class.delayed]="getWaitTimeColor(order.startTime) === 'danger'">
+        <ion-card-header>
+          <div class="order-header">
+            <div class="table-info">
+              <ion-badge color="primary" class="table-number">{{ order.tableNumber }}</ion-badge>
+              <ion-note>{{ order.waiterName || 'No Waiter' }}</ion-note>
+            </div>
+            <div class="timer">
+              <ion-icon name="time-outline" [color]="getWaitTimeColor(order.startTime)"></ion-icon>
+              <span [class.text-danger]="getWaitTimeColor(order.startTime) === 'danger'">
+                {{ getElapsedTime(order.startTime) }}
+              </span>
+            </div>
+          </div>
+        </ion-card-header>
+
+        <ion-card-content>
+          <ion-list lines="full">
+            @for (item of order.items; track $index) {
+              <ion-item class="order-item">
+                <ion-label>
+                  <h3>{{ item.quantity }}x {{ item.product.name }}</h3>
+                  @if (item.notes) {
+                    <p class="item-notes">📝 {{ item.notes }}</p>
+                  }
+                </ion-label>
+                <ion-button slot="end" fill="clear" color="success" (click)="markItemReady(order.tableId, $index)">
+                  <ion-icon slot="icon-only" name="checkmark-circle-outline"></ion-icon>
+                </ion-button>
+              </ion-item>
+            }
+          </ion-list>
+        </ion-card-content>
+      </ion-card>
+    } @empty {
+      <div class="empty-kds">
+        <ion-icon name="restaurant-outline"></ion-icon>
+        <h2>No Active Orders</h2>
+        <p>New orders from tables will appear here.</p>
+      </div>
+    }
+  </div>
+</ion-content>
